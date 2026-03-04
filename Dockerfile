@@ -29,6 +29,13 @@ WORKDIR /var/www/html
 # Copy project
 COPY . .
 
+# Ensure required directories exist
+RUN mkdir -p bootstrap/cache \
+    storage/logs \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views
+
 # Install dependencies
 RUN composer install --optimize-autoloader --no-dev --no-interaction
 
