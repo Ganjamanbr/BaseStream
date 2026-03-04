@@ -52,9 +52,9 @@ COPY docker/nginx-railway.conf /etc/nginx/conf.d/basestream.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/supervisord-railway.conf /etc/supervisor/conf.d/supervisord-railway.conf
 
-# Startup script
+# Startup script (ensure LF line endings for Linux)
 COPY docker/start-railway.sh /usr/local/bin/start-railway.sh
-RUN chmod +x /usr/local/bin/start-railway.sh
+RUN sed -i 's/\r$//' /usr/local/bin/start-railway.sh && chmod +x /usr/local/bin/start-railway.sh
 
 # Railway uses port 80
 EXPOSE 80
