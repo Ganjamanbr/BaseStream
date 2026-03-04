@@ -44,7 +44,7 @@ php artisan migrate --force --no-interaction 2>&1 || echo "  Warning: migrations
 USER_COUNT=$(php -r "try { \$pdo = new PDO('pgsql:host=' . getenv('DB_HOST') . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . getenv('DB_DATABASE'), getenv('DB_USERNAME'), getenv('DB_PASSWORD')); echo \$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(); } catch(Exception \$e) { echo '0'; }" 2>/dev/null)
 if [ "$USER_COUNT" = "0" ]; then
     echo "[4.5/5] Seeding database (first run)..."
-    php artisan db:seed --force --no-interaction 2>&1 || echo "  Warning: seeding failed"
+    php artisan db:seed --class=ProductionSeeder --force --no-interaction 2>&1 || echo "  Warning: seeding failed"
 else
     echo "[4.5/5] Database already has $USER_COUNT users, skipping seed."
 fi
