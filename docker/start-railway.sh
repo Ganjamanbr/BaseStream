@@ -3,6 +3,11 @@ set -e
 
 echo "=== BaseStream Railway Startup ==="
 
+# Configure nginx to listen on Railway's PORT (default: 80)
+LISTEN_PORT=${PORT:-80}
+echo "[0/5] Configuring nginx to listen on port $LISTEN_PORT..."
+sed -i "s/listen 80;/listen $LISTEN_PORT;/" /etc/nginx/conf.d/basestream.conf
+
 # Ensure storage directories have correct permissions FIRST
 echo "[1/5] Setting permissions..."
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
