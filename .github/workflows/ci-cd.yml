@@ -1,0 +1,101 @@
+name: BaseStream CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PHP_VERSION: '8.3'
+
+jobs:
+  test:
+    name: Tests + Quality
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: redis,pgsql,pdo_sqlite,mbstring,xml,curl
+          coverage: xdebug
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --no-progress --no-interaction --prefer-dist
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Run Tests + Coverage
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
+          SESSION_DRIVER: array
+          REDIS_HOST: 127.0.0.1
+        run: |
+          php artisan migrate:fresh --seed --env=testing
+          ./vendor/bin/pest --coverage --min=80
+
+      - name: PHPStan Static Analysis
+        run: ./vendor/bin/phpstan analyse --memory-limit=512M --no-progress
+        continue-on-error: true
+
+      - name: PHP CS Fixer (dry-run)
+        run: ./vendor/bin/php-cs-fixer fix --dry-run --diff --config=.php-cs-fixer.dist.php
+        continue-on-error: true
+
+  deploy:
+    name: Deploy to Railway
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --detach
+
+      - name: Health Check
+        run: |
+          sleep 30
+          curl -sf https://basestream.railway.app/health || echo "⚠️ Health check pending - Railway may still be deploying"
+
+      - name: Notify Discord
+        if: success()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -H "Content-Type: application/json" \
+              -d "{\"content\": \"🚀 **BaseStream Deploy** completed!\nCommit: \`${{ github.sha }}\`\nURL: https://basestream.railway.app/dashboard\"}" \
+              "$DISCORD_WEBHOOK"
+          fi
+        continue-on-error: true

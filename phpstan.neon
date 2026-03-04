@@ -1,0 +1,14 @@
+parameters:
+    level: 8
+    paths:
+        - app
+    excludePaths:
+        - app/Console/Kernel.php
+        - app/Exceptions/Handler.php
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Builder::#'
+        - '#Access to an undefined property App\\Models\\#'
+        - '#Method .* should return .* but returns Illuminate\\Http\\RedirectResponse#'
