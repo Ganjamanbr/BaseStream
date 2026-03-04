@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: basestream-app
+    # Override Railway CMD: local dev uses separate nginx container
+    command: ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
     restart: unless-stopped
     volumes:
       - .:/var/www/html

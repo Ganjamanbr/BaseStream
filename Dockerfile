@@ -1,6 +1,6 @@
 FROM php:8.3-fpm
 
-# System dependencies
+# System dependencies (including nginx for Railway single-container deploy)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     ffmpeg \
     supervisor \
+    nginx \
     && docker-php-ext-install pdo pdo_pgsql pdo_sqlite pgsql mbstring exif pcntl bcmath gd zip \
     && pecl install redis \
     && docker-php-ext-enable redis \
@@ -29,12 +30,13 @@ WORKDIR /var/www/html
 # Copy project
 COPY . .
 
-# Ensure required directories exist
+# Ensure required directories exist (excluded by .dockerignore / .gitignore)
 RUN mkdir -p bootstrap/cache \
     storage/logs \
     storage/framework/cache \
     storage/framework/sessions \
-    storage/framework/views
+    storage/framework/views \
+    /var/log/supervisor
 
 # Install dependencies
 RUN composer install --optimize-autoloader --no-dev --no-interaction
@@ -42,9 +44,20 @@ RUN composer install --optimize-autoloader --no-dev --no-interaction
 # Permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Supervisor config (app + horizon)
+# Nginx config for Railway (single container: nginx + php-fpm on 127.0.0.1:9000)
+RUN rm -f /etc/nginx/sites-enabled/default
+COPY docker/nginx-railway.conf /etc/nginx/conf.d/basestream.conf
+
+# Supervisor configs
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/supervisord-railway.conf /etc/supervisor/conf.d/supervisord-railway.conf
 
-EXPOSE 9000
+# Startup script
+COPY docker/start-railway.sh /usr/local/bin/start-railway.sh
+RUN chmod +x /usr/local/bin/start-railway.sh
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Railway uses port 80
+EXPOSE 80
+
+# Default: Railway startup (migrations + cache + supervisord with nginx)
+CMD ["/usr/local/bin/start-railway.sh"]
