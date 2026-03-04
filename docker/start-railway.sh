@@ -2,6 +2,7 @@
 set -e
 
 echo "=== BaseStream Railway Startup ==="
+echo "DEBUG: PORT=$PORT, RAILWAY_PORT=$RAILWAY_PORT"
 
 # Configure nginx to listen on Railway's PORT (default: 80)
 LISTEN_PORT=${PORT:-80}
