@@ -338,13 +338,29 @@ class ContentController extends Controller
             return back()->with('error', $errorMsg);
         }
 
-        $proxyUrl = ($stream['type'] ?? '') === 'iframe'
-            ? $stream['url']
-            : url('/conteudo/proxy/' . base64_encode($stream['url']));
+        $streamType = $stream['type'] ?? '';
+        $streamUrl  = $stream['url'];
 
-        // Armazena os headers customizados para o proxy usar
-        if (!empty($stream['headers'])) {
-            Cache::put('proxy_headers_' . md5($stream['url']), $stream['headers'], 3600);
+        // iframe → URL direta no iframe, sem proxy
+        // mp4/ts direto → redirect 302, PHP não consegue bufferizar GB de vídeo
+        // m3u8 → passa pelo proxy (precisa reescrever segmentos)
+        $directTypes = ['iframe', 'mp4', 'direct'];
+        $isDirectUrl = preg_match('/\.(mp4|mkv|webm|ts|avi)(\?.*)?$/i', $streamUrl);
+
+        if (in_array($streamType, $directTypes) || $isDirectUrl) {
+            // Para iframes e MP4 diretos: envia URL diretamente ao player
+            $proxyUrl = $streamUrl;
+            // Marca como direto para o player não tentar HLS.js
+            if ($streamType !== 'iframe' && $isDirectUrl) {
+                $stream['type'] = 'mp4';
+            }
+        } else {
+            $proxyUrl = url('/conteudo/proxy/' . base64_encode($streamUrl));
+        }
+
+        // Armazena os headers customizados para o proxy usar (só necessário para m3u8)
+        if (!empty($stream['headers']) && !in_array($streamType, $directTypes) && !$isDirectUrl) {
+            Cache::put('proxy_headers_' . md5($streamUrl), $stream['headers'], 3600);
         }
 
         return view('content.player', compact('stream', 'name', 'thumbnail', 'proxyUrl'));
@@ -358,6 +374,11 @@ class ContentController extends Controller
         $decodedUrl = base64_decode($url);
         if (!$decodedUrl || !filter_var($decodedUrl, FILTER_VALIDATE_URL)) {
             return response('Invalid URL', 400);
+        }
+
+        // Redireciona direto para MP4/vídeo — não bufferizamos arquivos grandes
+        if (preg_match('/\.(mp4|mkv|webm|ts|avi)(\?.*)?$/i', $decodedUrl)) {
+            return redirect()->away($decodedUrl, 302);
         }
 
         $referer = $request->get('referer', '');
