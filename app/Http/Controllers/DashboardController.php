@@ -129,6 +129,45 @@ class DashboardController extends Controller
     }
 
     /**
+     * POST /dashboard/tokens — Cria token via web session
+     */
+    public function createToken(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:100',
+        ]);
+
+        $useCase = app(\App\Application\UseCases\CreateApiTokenUseCase::class);
+
+        try {
+            $result = $useCase->execute(
+                user: $request->user(),
+                name: $request->input('name'),
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
+
+        return back()->with('success', "Token criado! Copie e salve agora: {$result['token']}");
+    }
+
+    /**
+     * DELETE /dashboard/tokens/{id} — Revoga token via web session
+     */
+    public function revokeToken(Request $request, int $id)
+    {
+        $token = $request->user()->apiTokens()->findOrFail($id);
+        $token->update(['is_active' => false]);
+
+        // HTMX request — retorna vazio para remoção suave
+        if ($request->header('HX-Request')) {
+            return response('', 200);
+        }
+
+        return back()->with('success', "Token '{$token->name}' revogado.");
+    }
+
+    /**
      * GET /dashboard/vlc — Guia de configuração VLC/IPTV players
      */
     public function vlcGuide()

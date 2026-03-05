@@ -1,6 +1,32 @@
 @extends('dashboard.layout')
 
 @section('content')
+    {{-- ─── Flash: Token Criado ─── --}}
+    @if (session('success'))
+        <div class="mb-6 glass rounded-2xl p-5 border border-green-500/30 bg-green-500/10" x-data="{ copied: false }">
+            <div class="flex items-center space-x-3 mb-3">
+                <span class="text-green-400 text-xl">✅</span>
+                <h3 class="text-green-300 font-bold text-lg">Token Criado com Sucesso!</h3>
+            </div>
+            <p class="text-gray-300 text-sm mb-3">
+                ⚠️ <strong>Copie seu token agora!</strong> Ele não será mostrado novamente.
+            </p>
+            <div class="flex items-center space-x-2">
+                <code class="flex-1 bg-black/40 text-green-300 px-4 py-3 rounded-xl text-xs font-mono break-all select-all">{{ str_replace(['Token criado! Copie e salve agora: '], '', session('success')) }}</code>
+                <button @click="navigator.clipboard.writeText($el.previousElementSibling.textContent.trim()); copied = true; setTimeout(() => copied = false, 2000)"
+                        class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-4 py-3 rounded-xl text-sm transition-colors whitespace-nowrap"
+                        x-text="copied ? '✓ Copiado!' : '📋 Copiar'">
+                </button>
+            </div>
+        </div>
+    @endif
+
+    @if ($errors->any())
+        <div class="mb-6 glass rounded-2xl p-4 border border-red-500/30 bg-red-500/10">
+            <p class="text-red-300 text-sm">{{ $errors->first() }}</p>
+        </div>
+    @endif
+
     {{-- ─── Header ─── --}}
     <div class="flex items-center justify-between mb-6">
         <div>
@@ -64,8 +90,8 @@
 
                 {{-- Actions --}}
                 <div class="mt-4 pt-3 border-t border-white/5 flex justify-end">
-                    <form method="POST" action="/api/tokens/{{ $token->id }}"
-                          hx-delete="/api/tokens/{{ $token->id }}"
+                    <form method="POST" action="{{ route('dashboard.tokens.revoke', $token->id) }}"
+                          hx-delete="{{ route('dashboard.tokens.revoke', $token->id) }}"
                           hx-target="closest .glass"
                           hx-swap="outerHTML"
                           hx-confirm="Revogar token '{{ $token->name }}'? O device será desconectado.">
@@ -100,12 +126,12 @@
                  x-transition:enter-start="opacity-0 scale-95"
                  x-transition:enter-end="opacity-100 scale-100">
                 <h3 class="text-lg font-semibold text-white mb-4">Adicionar Device</h3>
-                <form method="POST" action="/api/tokens">
+                <form method="POST" action="{{ route('dashboard.tokens.create') }}">
                     @csrf
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm text-gray-400 mb-2">Nome do Device</label>
-                            <input type="text" name="name" placeholder="Ex: Samsung TV Sala"
+                            <input type="text" name="name" placeholder="Ex: Samsung TV Sala, VLC PC, etc"
                                    class="w-full bg-white/5 border border-purple-500/30 rounded-xl px-4 py-3 text-white
                                           placeholder-gray-500 focus:border-purple-400 focus:ring-1 focus:ring-purple-400/50
                                           focus:outline-none transition-colors"

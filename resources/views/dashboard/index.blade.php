@@ -77,12 +77,12 @@
                  x-transition:enter-start="opacity-0 scale-95"
                  x-transition:enter-end="opacity-100 scale-100">
                 <h3 class="text-lg font-semibold text-white mb-4">Criar Token de Device</h3>
-                <form method="POST" action="/api/tokens">
+                <form method="POST" action="{{ route('dashboard.tokens.create') }}">
                     @csrf
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm text-gray-400 mb-2">Nome do Device</label>
-                            <input type="text" name="name" placeholder="Ex: Samsung TV Sala"
+                            <input type="text" name="name" placeholder="Ex: Samsung TV Sala, VLC PC, etc"
                                    class="w-full bg-white/5 border border-purple-500/30 rounded-xl px-4 py-3 text-white
                                           placeholder-gray-500 focus:border-purple-400 focus:ring-1 focus:ring-purple-400/50
                                           focus:outline-none transition-colors"
