@@ -17,6 +17,17 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Railway / Heroku / cloud load-balancers — trust all proxies
         $middleware->trustProxies(at: '*');
+
+        // Exclude Xtream Codes API from CSRF — external IPTV apps can't send tokens
+        $middleware->validateCsrfTokens(except: [
+            'player_api.php',
+            'get.php',
+            'live/*',
+            'movie/*',
+            'series/*',
+            'api/transcode/*',
+            'stream/hls/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

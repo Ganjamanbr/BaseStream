@@ -18,30 +18,54 @@
             <p class="text-amber-400 text-sm mb-4">
                 ⚠️ A senha NÃO será exibida novamente. Salve-a em local seguro antes de sair desta página.
             </p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {{-- Usuário --}}
-                <div>
-                    <p class="text-gray-400 text-xs mb-1">Usuário</p>
-                    <div class="flex items-center space-x-2">
-                        <code class="flex-1 bg-black/40 text-green-300 px-4 py-3 rounded-xl text-sm font-mono select-all">{{ $gen['username'] }}</code>
-                        <button @click="navigator.clipboard.writeText('{{ $gen['username'] }}'); copied_u = true; setTimeout(() => copied_u = false, 2000)"
-                                class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-3 rounded-xl text-sm transition-colors whitespace-nowrap"
-                                x-text="copied_u ? '✓' : '📋'">
+                {{-- Username + Senha --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {{-- Usuário --}}
+                    <div>
+                        <p class="text-gray-400 text-xs mb-1">Usuário</p>
+                        <div class="flex items-center space-x-2">
+                            <code class="flex-1 bg-black/40 text-green-300 px-4 py-3 rounded-xl text-sm font-mono select-all">{{ $gen['username'] }}</code>
+                            <button @click="navigator.clipboard.writeText('{{ $gen['username'] }}'); copied_u = true; setTimeout(() => copied_u = false, 2000)"
+                                    class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-3 rounded-xl text-sm transition-colors whitespace-nowrap"
+                                    x-text="copied_u ? '✓' : '📋'">
+                            </button>
+                        </div>
+                    </div>
+                    {{-- Senha --}}
+                    <div>
+                        <p class="text-gray-400 text-xs mb-1">Senha</p>
+                        <div class="flex items-center space-x-2">
+                            <code class="flex-1 bg-black/40 text-green-300 px-4 py-3 rounded-xl text-sm font-mono select-all">{{ $gen['password'] }}</code>
+                            <button @click="navigator.clipboard.writeText('{{ $gen['password'] }}'); copied_p = true; setTimeout(() => copied_p = false, 2000)"
+                                    class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-3 rounded-xl text-sm transition-colors whitespace-nowrap"
+                                    x-text="copied_p ? '✓' : '📋'">
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Servidor + M3U URL --}}
+                <div class="mt-4 pt-4 border-t border-white/10">
+                    <p class="text-gray-400 text-xs mb-2">🌐 Servidor (use no app em "Server URL")</p>
+                    @php $serverHost = request()->getSchemeAndHttpHost(); @endphp
+                    <div x-data="{ copied_s: false }" class="flex items-center space-x-2 mb-3">
+                        <code class="flex-1 bg-black/40 text-cyan-300 px-4 py-2.5 rounded-xl text-sm font-mono select-all break-all">{{ $serverHost }}</code>
+                        <button @click="navigator.clipboard.writeText('{{ $serverHost }}'); copied_s = true; setTimeout(() => copied_s = false, 2000)"
+                                class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-2.5 rounded-xl text-sm transition-colors whitespace-nowrap"
+                                x-text="copied_s ? '✓' : '📋'">
+                        </button>
+                    </div>
+
+                    <p class="text-gray-400 text-xs mb-2">📎 URL M3U completa (VLC, Kodi)</p>
+                    @php $m3uFull = $serverHost . '/get.php?username=' . urlencode($gen['username']) . '&password=' . urlencode($gen['password']) . '&type=m3u_plus&output=ts'; @endphp
+                    <div x-data="{ copied_m: false }" class="flex items-center space-x-2">
+                        <code class="flex-1 bg-black/40 text-yellow-300 px-4 py-2.5 rounded-xl text-xs font-mono select-all break-all">{{ $m3uFull }}</code>
+                        <button @click="navigator.clipboard.writeText('{{ $m3uFull }}'); copied_m = true; setTimeout(() => copied_m = false, 2000)"
+                                class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-2.5 rounded-xl text-sm transition-colors whitespace-nowrap"
+                                x-text="copied_m ? '✓' : '📋'">
                         </button>
                     </div>
                 </div>
-                {{-- Senha --}}
-                <div>
-                    <p class="text-gray-400 text-xs mb-1">Senha</p>
-                    <div class="flex items-center space-x-2">
-                        <code class="flex-1 bg-black/40 text-green-300 px-4 py-3 rounded-xl text-sm font-mono select-all">{{ $gen['password'] }}</code>
-                        <button @click="navigator.clipboard.writeText('{{ $gen['password'] }}'); copied_p = true; setTimeout(() => copied_p = false, 2000)"
-                                class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-3 rounded-xl text-sm transition-colors whitespace-nowrap"
-                                x-text="copied_p ? '✓' : '📋'">
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     @endif
 
@@ -94,9 +118,10 @@
                 {{-- Server URL --}}
                 <div x-data="{ copied: false }">
                     <label class="block text-xs text-gray-500 mb-1.5">Servidor (Server URL)</label>
+                    @php $serverUrl = request()->getSchemeAndHttpHost(); @endphp
                     <div class="flex items-center space-x-2">
-                        <code class="flex-1 bg-black/40 text-cyan-300 px-4 py-2.5 rounded-xl text-sm font-mono select-all break-all">{{ url('/') }}</code>
-                        <button @click="navigator.clipboard.writeText('{{ url('/') }}'); copied = true; setTimeout(() => copied = false, 2000)"
+                        <code class="flex-1 bg-black/40 text-cyan-300 px-4 py-2.5 rounded-xl text-sm font-mono select-all break-all">{{ $serverUrl }}</code>
+                        <button @click="navigator.clipboard.writeText('{{ $serverUrl }}'); copied = true; setTimeout(() => copied = false, 2000)"
                                 x-text="copied ? '✓ Copiado' : '📋'"
                                 class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-2.5 rounded-xl text-sm transition-colors whitespace-nowrap">
                         </button>
@@ -180,30 +205,25 @@
             <span>URL M3U (alternativa)</span>
         </h2>
         <p class="text-gray-500 text-xs mb-4">
-            Para apps mais simples que aceitam apenas URL M3U (VLC, Kodi, etc).
+            Para apps mais simples que aceitam apenas URL M3U (VLC, Kodi, etc).<br>
+            <span class="text-amber-400">⚠️ Você precisa da sua senha para construir a URL. Se perdeu, revogue e gere novas credenciais.</span>
         </p>
 
         @php
-            $m3uUrl = url('/get.php') . '?' . http_build_query([
-                'username' => $user->xtream_username,
-                'password' => '__SENHA__',
-                'type'     => 'm3u_plus',
-                'output'   => 'ts',
-            ]);
+            $serverUrl = request()->getSchemeAndHttpHost();
+            $m3uBase   = $serverUrl . '/get.php?username=' . urlencode($user->xtream_username ?? '') . '&password=SUA_SENHA&type=m3u_plus&output=ts';
         @endphp
 
         <div x-data="{ copied: false }">
             <div class="flex items-center space-x-2">
-                <code class="flex-1 bg-black/40 text-yellow-300 px-4 py-2.5 rounded-xl text-xs font-mono select-all break-all">
-                    {{ url('/get.php') }}?username={{ $user->xtream_username }}&password=<span class="text-red-400">SUA_SENHA</span>&type=m3u_plus&output=ts
-                </code>
-                <button @click="navigator.clipboard.writeText('{{ url('/get.php') }}?username={{ $user->xtream_username }}&password=SUA_SENHA&type=m3u_plus&output=ts'); copied = true; setTimeout(() => copied = false, 2000)"
+                <code class="flex-1 bg-black/40 text-yellow-300 px-4 py-2.5 rounded-xl text-xs font-mono select-all break-all">{{ $serverUrl }}/get.php?username={{ $user->xtream_username }}&amp;password=<span class="text-red-400">SUA_SENHA</span>&amp;type=m3u_plus&amp;output=ts</code>
+                <button @click="navigator.clipboard.writeText('{{ $m3uBase }}'); copied = true; setTimeout(() => copied = false, 2000)"
                         x-text="copied ? '✓' : '📋'"
                         class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-2.5 rounded-xl text-sm transition-colors whitespace-nowrap">
                 </button>
             </div>
         </div>
-        <p class="text-red-400 text-xs mt-2">⚠️ Substitua <code>SUA_SENHA</code> pela senha gerada.</p>
+        <p class="text-red-400 text-xs mt-2">⚠️ Substitua <code>SUA_SENHA</code> pela sua senha Xtream.</p>
     </div>
     @endif
 
@@ -233,7 +253,7 @@
                     <ol class="space-y-2 text-sm text-gray-300 list-decimal list-inside">
                         <li>Abra <strong>TiviMate</strong> e vá em <span class="text-purple-300">Configurações → Adicionar Playlist</span></li>
                         <li>Selecione <strong>Xtream Codes</strong></li>
-                        <li>Servidor: <code class="text-cyan-300 bg-black/30 px-2 py-0.5 rounded">{{ url('/') }}</code></li>
+                        <li>Servidor: <code class="text-cyan-300 bg-black/30 px-2 py-0.5 rounded">{{ request()->getSchemeAndHttpHost() }}</code></li>
                         <li>Usuário: <code class="text-purple-300 bg-black/30 px-2 py-0.5 rounded">{{ $user->xtream_username ?? 'seu_usuario' }}</code></li>
                         <li>Senha: <span class="text-pink-300">(a senha gerada acima)</span></li>
                         <li>Toque em <strong>Adicionar</strong> e aguarde o carregamento</li>
@@ -259,7 +279,7 @@
                         <li>Abra o app e toque em <strong>Adicionar novo usuário</strong></li>
                         <li>Selecione <strong>Xtream Codes API</strong></li>
                         <li>Nome do perfil: <span class="text-gray-400">BaseStream</span></li>
-                        <li>URL do servidor: <code class="text-cyan-300 bg-black/30 px-2 py-0.5 rounded">{{ url('/') }}</code></li>
+                        <li>URL do servidor: <code class="text-cyan-300 bg-black/30 px-2 py-0.5 rounded">{{ request()->getSchemeAndHttpHost() }}</code></li>
                         <li>Usuário e Senha: conforme gerado acima</li>
                         <li>Toque em <strong>Entrar</strong></li>
                     </ol>

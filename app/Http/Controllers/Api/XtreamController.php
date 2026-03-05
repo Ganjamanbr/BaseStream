@@ -109,18 +109,21 @@ class XtreamController extends Controller
 
     // ─── Server info helper ───
 
-    private function serverInfo(): array
+    private function serverInfo(Request $request): array
     {
-        $url = url('/');
-        $https = str_starts_with($url, 'https');
-        $port  = $https ? '443' : '80';
-        $host  = parse_url($url, PHP_URL_HOST);
+        // Use the actual request host — works correctly behind Railway/Nginx proxy
+        // (TrustProxies is set to '*', so X-Forwarded-Proto/Host are respected)
+        $scheme = $request->getScheme();
+        $host   = $request->getHttpHost();  // includes port if non-standard
+        $url    = $scheme . '://' . $host;
+        $https  = $scheme === 'https';
+        $port   = $https ? '443' : '80';
 
         return [
             'url'              => $url,
             'port'             => $port,
             'https_port'       => '443',
-            'server_protocol'  => $https ? 'https' : 'http',
+            'server_protocol'  => $scheme,
             'rtmp_port'        => '1935',
             'timezone'         => 'America/Sao_Paulo',
             'timestamp_now'    => time(),
@@ -171,17 +174,17 @@ class XtreamController extends Controller
             'get_series'            => $this->actionSeries($request),
             'get_series_info'       => $this->actionSeriesInfo($request),
             'get_vod_info'          => $this->actionVodInfo($request),
-            default                 => $this->actionServerInfo($user),
+            default                 => $this->actionServerInfo($user, $request),
         };
     }
 
     // ─── No action → server + user info ───
 
-    private function actionServerInfo(User $user): JsonResponse
+    private function actionServerInfo(User $user, Request $request): JsonResponse
     {
         return response()->json([
             'user_info'   => $this->userInfo($user),
-            'server_info' => $this->serverInfo(),
+            'server_info' => $this->serverInfo($request),
         ]);
     }
 
@@ -503,7 +506,7 @@ class XtreamController extends Controller
             return response('Credenciais inválidas', 401);
         }
 
-        $baseUrl = url('/');
+        $baseUrl = $request->getScheme() . '://' . $request->getHttpHost();
         $u = urlencode($user->xtream_username ?? '');
         $p = $request->query('password', '');
 
