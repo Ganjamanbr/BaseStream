@@ -12,6 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://basestream.railway.app">
     <meta name="description" content="BaseStream - Proxy IPTV dinâmico multi-device com cache Redis e queue async">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     {{-- Tailwind CDN (50kb gzipped — Samsung Tizen friendly) --}}
     <script src="https://cdn.tailwindcss.com"></script>
@@ -34,6 +35,12 @@
 
     {{-- HTMX — dynamic partials sem page reload --}}
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script>
+        // Send CSRF token with every HTMX request
+        document.addEventListener('htmx:configRequest', function(e) {
+            e.detail.headers['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').content;
+        });
+    </script>
 
     {{-- Alpine.js — modals, dropdowns, interações leves --}}
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
