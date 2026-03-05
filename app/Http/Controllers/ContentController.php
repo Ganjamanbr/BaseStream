@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\BrazucaContentService;
 use App\Services\StreamResolverService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -333,6 +334,11 @@ class ContentController extends Controller
 
         $proxyUrl = url('/conteudo/proxy/' . base64_encode($stream['url']));
 
+        // Armazena os headers customizados para o proxy usar
+        if (!empty($stream['headers'])) {
+            Cache::put('proxy_headers_' . md5($stream['url']), $stream['headers'], 3600);
+        }
+
         return view('content.player', compact('stream', 'name', 'thumbnail', 'proxyUrl'));
     }
 
@@ -348,6 +354,15 @@ class ContentController extends Controller
 
         $referer = $request->get('referer', '');
         $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+
+        // Verifica se há headers customizados armazenados para esta URL
+        $customHeaders = Cache::get('proxy_headers_' . md5($decodedUrl), []);
+        if (!empty($customHeaders['User-Agent'])) {
+            $userAgent = $customHeaders['User-Agent'];
+        }
+        if (!empty($customHeaders['Referer'])) {
+            $referer = $customHeaders['Referer'];
+        }
 
         try {
             $response = \Illuminate\Support\Facades\Http::timeout(20)

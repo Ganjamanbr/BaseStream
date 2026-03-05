@@ -46,7 +46,17 @@ class StreamResolverService
 
         // Resolver API (resolver1_tvshows=xxx, etc.)
         if (preg_match('/^resolver(\d+)_tvshows=(.+)$/', $link, $m)) {
-            return $this->resolveViaApi((int) $m[1], $m[2]);
+            return $this->resolveViaApi((int) $m[1], $m[2], 'tvshows');
+        }
+
+        // Resolver episodes (resolver1_episodes=xxx)
+        if (preg_match('/^resolver(\d+)_episodes=(.+)$/', $link, $m)) {
+            return $this->resolveViaApi((int) $m[1], $m[2], 'episodes');
+        }
+
+        // Resolver movies (resolver1_mv=xxx)
+        if (preg_match('/^resolver(\d+)_mv=(.+)$/', $link, $m)) {
+            return $this->resolveViaApi((int) $m[1], $m[2], 'mvshows');
         }
 
         // serie3=xxx → usa overflix_resolver
@@ -120,45 +130,57 @@ class StreamResolverService
 
     /**
      * Resolve canais IPTV via XC-IPTV API (mesmo método do BrazucaPlay).
+     * Formato: chresolver1=CHANNEL#RESOLVER_ID (ex: 112#2)
      */
     private function resolveIptv(string $channelSlug): ?array
     {
-        // Busca credenciais IPTV do channels.xml
-        $creds = $this->getIptvCredentials();
-        if (!$creds) {
-            Log::warning("StreamResolver: No IPTV credentials found");
-            return null;
+        // Separa channel e resolver ID (ex: "112#2" → channel=112, resolverId=2)
+        $channel = $channelSlug;
+        $resolverId = null;
+        if (str_contains($channelSlug, '#')) {
+            [$channel, $resolverId] = explode('#', $channelSlug, 2);
         }
 
-        foreach ($creds as $cred) {
-            $url = "http://{$cred['host']}:{$cred['port']}/live/{$cred['user']}/{$cred['pass']}/{$channelSlug}.m3u8";
+        // Se tem resolver ID, busca credenciais dinâmicas do XML
+        if ($resolverId) {
+            $creds = $this->getIptvDynamicCredentials($resolverId);
+            if ($creds && $creds['host'] && !empty($creds['accounts'])) {
+                foreach ($creds['accounts'] as $account) {
+                    try {
+                        // O host é um template com %s para account e channel
+                        $url = sprintf($creds['host'], $account, $channel);
+                        Log::info("StreamResolver: IPTV testing: " . substr($url, 0, 100));
 
-            try {
-                $response = Http::timeout(8)
-                    ->withHeaders(['User-Agent' => $this->userAgent])
-                    ->head($url);
+                        $response = Http::timeout(8)
+                            ->withHeaders(['User-Agent' => 'XC-IPTV'])
+                            ->get($url);
 
-                if ($response->successful()) {
-                    return [
-                        'url' => $url,
-                        'headers' => ['User-Agent' => $this->userAgent],
-                        'type' => 'hls',
-                    ];
+                        if ($response->successful()) {
+                            return [
+                                'url' => $url,
+                                'headers' => ['User-Agent' => 'XC-IPTV'],
+                                'type' => 'hls',
+                            ];
+                        }
+                    } catch (\Throwable $e) {
+                        Log::debug("StreamResolver: IPTV account failed: {$e->getMessage()}");
+                        continue;
+                    }
                 }
-            } catch (\Throwable $e) {
-                Log::debug("StreamResolver: IPTV provider failed: {$e->getMessage()}");
-                continue;
             }
         }
 
-        // Fallback
-        $fallbackUrl = "https://s.apkwuv.xyz/live/demopadexchange/demopad/{$channelSlug}.m3u8";
+        // Fallback: servidor fixo com credenciais hardcoded
+        $fallbackUrl = "http://s.apkwuv.xyz/live/demopadexchange/demopad/{$channel}.m3u8";
         try {
-            $response = Http::timeout(8)->head($fallbackUrl);
+            $response = Http::timeout(8)
+                ->withHeaders(['User-Agent' => 'Dalvik/2.1.0 (Linux; U; Android 9; SM-S908E Build/TP1A.220624.014)'])
+                ->get($fallbackUrl);
+
             if ($response->successful()) {
                 return [
                     'url' => $fallbackUrl,
-                    'headers' => ['User-Agent' => $this->userAgent],
+                    'headers' => ['User-Agent' => 'Dalvik/2.1.0 (Linux; U; Android 9; SM-S908E Build/TP1A.220624.014)'],
                     'type' => 'hls',
                 ];
             }
@@ -169,56 +191,75 @@ class StreamResolverService
     }
 
     /**
-     * Busca credenciais IPTV encodadas no channels.xml.
+     * Busca credenciais IPTV dinâmicas do channels.xml usando tags hostname_N e users_N.
+     * O Python usa: <hostname_2>BASE64</hostname_2> e <users_2>BASE64</users_2>
      */
-    private function getIptvCredentials(): array
+    private function getIptvDynamicCredentials(string $resolverId): ?array
     {
-        return Cache::remember('iptv_credentials', 3600, function () {
+        return Cache::remember("iptv_creds_{$resolverId}", 3600, function () use ($resolverId) {
             try {
                 $response = Http::timeout(15)
                     ->withHeaders(['User-Agent' => $this->userAgent])
                     ->get('https://gist.githubusercontent.com/skyrisk/16070347f20c87c72540f9f805b57a66/raw/channels.xml');
 
-                if (!$response->successful()) return [];
+                if (!$response->successful()) return null;
 
                 $xml = $response->body();
-                $creds = [];
 
-                // Busca hosts/accounts base64-encoded no XML
-                if (preg_match_all('/host_base64\s*=\s*"([^"]+)"/', $xml, $hostMatches)) {
-                    foreach ($hostMatches[1] as $idx => $encoded) {
-                        $decoded = @base64_decode($encoded);
-                        if ($decoded) {
-                            $creds[] = [
-                                'host' => $decoded,
-                                'port' => '80',
-                                'user' => 'demopadexchange',
-                                'pass' => 'demopad',
-                            ];
-                        }
+                // Busca hostname_N e users_N
+                $hostPattern = "/<hostname_{$resolverId}>(.+?)<\/hostname_{$resolverId}>/s";
+                $usersPattern = "/<users_{$resolverId}>(.+?)<\/users_{$resolverId}>/s";
+
+                $host = null;
+                $accounts = [];
+
+                if (preg_match($hostPattern, $xml, $hm)) {
+                    $decoded = @base64_decode(trim($hm[1]));
+                    if ($decoded) {
+                        $host = $decoded;
+                        Log::info("StreamResolver: IPTV host template found for resolver {$resolverId}");
                     }
                 }
 
-                return $creds;
+                if (preg_match($usersPattern, $xml, $um)) {
+                    $decoded = @base64_decode(trim($um[1]));
+                    if ($decoded) {
+                        $accounts = array_filter(explode('|', $decoded));
+                        Log::info("StreamResolver: IPTV found " . count($accounts) . " accounts for resolver {$resolverId}");
+                    }
+                }
+
+                if (!$host || empty($accounts)) {
+                    Log::warning("StreamResolver: No IPTV credentials for resolver {$resolverId}");
+                    return null;
+                }
+
+                return ['host' => $host, 'accounts' => $accounts];
             } catch (\Throwable $e) {
                 Log::error("StreamResolver: Failed to get IPTV creds: {$e->getMessage()}");
-                return [];
+                return null;
             }
         });
     }
 
     /**
      * Resolve via Pluto TV API (gratuito e legal).
+     * Adiciona device params obrigatórios na URL stitched (como o Python).
      */
     private function resolvePlutoTv(string $channelSlug): ?array
     {
-        $channels = Cache::remember('pluto_tv_channels', 1800, function () {
+        $sid = Cache::remember('pluto_tv_sid', 86400, fn() => bin2hex(random_bytes(16)));
+        $deviceId = Cache::remember('pluto_tv_device_id', 86400, fn() => (string) \Illuminate\Support\Str::uuid());
+
+        $channels = Cache::remember('pluto_tv_channels', 1800, function () use ($sid, $deviceId) {
             try {
                 $response = Http::timeout(15)
                     ->withHeaders(['User-Agent' => $this->userAgent])
                     ->get('https://api.pluto.tv/v2/channels.json', [
-                        'start' => now()->toIso8601String(),
-                        'stop' => now()->addHours(2)->toIso8601String(),
+                        'start' => now()->format('Y-m-d\TH:00:00\Z'),
+                        'stop' => now()->addHours(4)->format('Y-m-d\TH:00:00\Z'),
+                        'sid' => $sid,
+                        'deviceId' => $deviceId,
                     ]);
 
                 if (!$response->successful()) return [];
@@ -235,9 +276,8 @@ class StreamResolverService
             if ($slug === $channelSlug || strtolower($name) === strtolower($channelSlug)) {
                 $stitcherUrl = $channel['stitched']['urls'][0]['url'] ?? null;
                 if ($stitcherUrl) {
-                    // Remove parâmetros de tracking
-                    $stitcherUrl = preg_replace('/&deviceDNT=\d+/', '', $stitcherUrl);
-                    $stitcherUrl = preg_replace('/&deviceId=[^&]+/', '', $stitcherUrl);
+                    $stitcherUrl = $this->addPlutoDeviceParams($stitcherUrl, $sid);
+                    Log::info("StreamResolver: PlutoTV resolved {$channelSlug} → " . substr($stitcherUrl, 0, 120));
 
                     return [
                         'url' => $stitcherUrl,
@@ -249,6 +289,47 @@ class StreamResolverService
         }
 
         return null;
+    }
+
+    /**
+     * Adiciona device params obrigatórios na URL stitched do PlutoTV.
+     * Sem esses params a CDN retorna 400 "empty plutotv-device-model".
+     */
+    private function addPlutoDeviceParams(string $url, string $sid): string
+    {
+        // Se URL termina com ?deviceType= (sem valor), preenche todos os params
+        if (str_ends_with($url, '?deviceType=') || str_contains($url, 'deviceType=&') || str_contains($url, 'deviceType=')) {
+            // Garante que todos os params existam
+            if (!str_contains($url, 'deviceMake=')) {
+                $url = str_replace('deviceType=', 'deviceType=&deviceMake=&deviceModel=&deviceVersion=unknown&appVersion=unknown&deviceDNT=0&userId=&advertisingId=&app_name=&appName=&buildVersion=&appStoreUrl=&architecture=&includeExtendedEvents=false', $url);
+            }
+
+            // Adiciona sid se não existir
+            if (!str_contains($url, 'sid=')) {
+                $url = str_replace('deviceModel=&', "deviceModel=&sid={$sid}&", $url);
+            }
+
+            // Preenche valores dos device params
+            $url = str_replace('deviceType=&', 'deviceType=web&', $url);
+            $url = str_replace('deviceMake=&', 'deviceMake=Chrome&', $url);
+            $url = str_replace('deviceModel=&', 'deviceModel=Chrome&', $url);
+            $url = str_replace('appName=&', 'appName=web&', $url);
+        } else {
+            // URL não tem device params → adiciona manualmente
+            $separator = str_contains($url, '?') ? '&' : '?';
+            $url .= $separator . http_build_query([
+                'deviceType' => 'web',
+                'deviceMake' => 'Chrome',
+                'deviceModel' => 'Chrome',
+                'deviceVersion' => 'unknown',
+                'appVersion' => 'unknown',
+                'deviceDNT' => '0',
+                'sid' => $sid,
+                'appName' => 'web',
+            ]);
+        }
+
+        return $url;
     }
 
     /**
@@ -755,25 +836,32 @@ class StreamResolverService
 
     /**
      * Resolve conteúdo via API geekantenado (proxy resolver).
+     * Usa Bearer token JWT e formato params base64-encoded como o Python.
      */
-    private function resolveViaApi(int $resolverNum, string $slug): ?array
+    private function resolveViaApi(int $resolverNum, string $slug, string $requestType = 'tvshows'): ?array
     {
         $apis = [
-            'https://api.geekantenado.online',
-            'https://geekantenado.fly.dev',
+            'api.geekantenado.online',
+            'geekantenado.fly.dev',
         ];
 
-        foreach ($apis as $apiBase) {
+        $token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyZXNvbHZlciIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzY4NTk1ODQxfQ.JPJC4433PfyZp_QMx40zAIE_8vVW54-N_ZLugy3RvgY';
+
+        // Monta params no formato Python dict string (como o BrazucaPlay faz)
+        $params = "{'resolver': {$resolverNum}, 'request': '{$requestType}={$slug}'}";
+        $payload = urlencode(base64_encode($params));
+
+        foreach ($apis as $apiHost) {
             try {
+                $url = "https://{$apiHost}/?resolver={$payload}";
+                Log::info("StreamResolver: API call to {$apiHost} resolver={$resolverNum} type={$requestType}");
+
                 $response = Http::timeout(15)
                     ->withHeaders([
                         'User-Agent' => $this->userAgent,
-                        'Content-Type' => 'application/json',
+                        'Authorization' => "Bearer {$token}",
                     ])
-                    ->post("{$apiBase}/resolver", [
-                        'resolver' => $resolverNum,
-                        'request' => "tvshows={$slug}",
-                    ]);
+                    ->get($url);
 
                 if ($response->successful()) {
                     $data = $response->json();
@@ -781,17 +869,42 @@ class StreamResolverService
                     if (($data['success'] ?? false) && !empty($data['result'])) {
                         $result = $data['result'];
 
-                        // Result pode ser base64-encoded
-                        $decoded = @base64_decode($result);
-                        if ($decoded) {
-                            $result = $decoded;
+                        if ($result === 'API Under Maintenance' || $result === 'episode not found!') {
+                            Log::warning("StreamResolver: API response: {$result}");
+                            continue;
                         }
 
-                        // Tenta extrair URL direta
+                        // Result é base64-encoded na maioria dos casos
                         if (is_string($result)) {
-                            $parsed = @json_decode($result, true);
+                            $decoded = @base64_decode($result);
+                            if ($decoded && (str_contains($decoded, 'http') || str_contains($decoded, '.m3u8') || str_contains($decoded, '.mp4'))) {
+                                // Pode ter subtítulo separado por #
+                                $streamUrl = str_contains($decoded, '#') ? explode('#', $decoded)[0] : $decoded;
+                                // Remove Kodi pipe headers se existirem
+                                $streamUrl = explode('|', $streamUrl)[0];
+
+                                if (filter_var($streamUrl, FILTER_VALIDATE_URL)) {
+                                    return [
+                                        'url' => $streamUrl,
+                                        'headers' => ['User-Agent' => $this->userAgent],
+                                        'type' => str_contains($streamUrl, '.m3u8') ? 'hls' : 'mp4',
+                                    ];
+                                }
+                            }
+
+                            // Tenta como JSON
+                            $parsed = @json_decode($decoded ?: $result, true);
                             if ($parsed) {
                                 return $this->extractUrlFromResolverResult($parsed);
+                            }
+
+                            // URL direta sem base64
+                            if (filter_var($result, FILTER_VALIDATE_URL)) {
+                                return [
+                                    'url' => $result,
+                                    'headers' => ['User-Agent' => $this->userAgent],
+                                    'type' => str_contains($result, '.m3u8') ? 'hls' : 'mp4',
+                                ];
                             }
                         }
 
@@ -801,12 +914,47 @@ class StreamResolverService
                     }
                 }
             } catch (\Throwable $e) {
-                Log::debug("StreamResolver: API {$apiBase} failed: {$e->getMessage()}");
+                Log::debug("StreamResolver: API {$apiHost} failed: {$e->getMessage()}");
                 continue;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Busca credencial wvmob via API geekantenado.
+     */
+    private function getWvmobCredential(): ?string
+    {
+        return Cache::remember('wvmob_user', 18000, function () {
+            $token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyZXNvbHZlciIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzY4NTk1ODQxfQ.JPJC4433PfyZp_QMx40zAIE_8vVW54-N_ZLugy3RvgY';
+            $params = "{'wvmob': 1}";
+            $payload = urlencode(base64_encode($params));
+
+            $apis = ['api.geekantenado.online', 'geekantenado.fly.dev'];
+            foreach ($apis as $apiHost) {
+                try {
+                    $url = "https://{$apiHost}/?resolver={$payload}";
+                    $response = Http::timeout(15)
+                        ->withHeaders([
+                            'User-Agent' => $this->userAgent,
+                            'Authorization' => "Bearer {$token}",
+                        ])
+                        ->get($url);
+
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if (($data['success'] ?? false) && !empty($data['result'])) {
+                            return $data['result'];
+                        }
+                    }
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+            return null;
+        });
     }
 
     /**
@@ -951,11 +1099,16 @@ class StreamResolverService
     {
         return Cache::remember('pluto_tv_channels_list', 1800, function () {
             try {
+                $sid = Cache::remember('pluto_tv_sid', 86400, fn() => bin2hex(random_bytes(16)));
+                $deviceId = Cache::remember('pluto_tv_device_id', 86400, fn() => (string) \Illuminate\Support\Str::uuid());
+
                 $response = Http::timeout(15)
                     ->withHeaders(['User-Agent' => $this->userAgent])
                     ->get('https://api.pluto.tv/v2/channels.json', [
-                        'start' => now()->toIso8601String(),
-                        'stop' => now()->addHours(2)->toIso8601String(),
+                        'start' => now()->format('Y-m-d\TH:00:00\Z'),
+                        'stop' => now()->addHours(4)->format('Y-m-d\TH:00:00\Z'),
+                        'sid' => $sid,
+                        'deviceId' => $deviceId,
                     ]);
 
                 if (!$response->successful()) return [];
