@@ -3,6 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
+startCommand = "/usr/local/bin/start-railway.sh"
 healthcheckPath = "/up"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
