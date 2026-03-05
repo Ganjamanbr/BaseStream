@@ -59,5 +59,7 @@ RUN sed -i 's/\r$//' /usr/local/bin/start-railway.sh && chmod +x /usr/local/bin/
 # Railway uses port 80
 EXPOSE 80
 
+CMD ["/usr/local/bin/start-railway.sh"]
+
 # Default: Railway startup (migrations + cache + supervisord with nginx)
 CMD ["/usr/local/bin/start-railway.sh"]
