@@ -506,6 +506,18 @@ class StreamResolverService
                     }
                 }
 
+                // Fallback título: extrai título do slug Overflix e busca IMDB ID
+                $rawSlug = $rawSlug ?: (str_starts_with($link, 'movie2=') ? substr($link, 7) : substr($link, 7));
+                $mediaType = str_starts_with($link, 'movie2=') ? 'movie' : 'tv';
+                $extracted = $this->extractTitleFromSlug($rawSlug);
+                if (!empty($extracted['title'])) {
+                    $vidsrc = $this->resolveByTitle($extracted['title'], $extracted['year'], $mediaType);
+                    if ($vidsrc) {
+                        Log::info("StreamResolver: Overflix no player, title-lookup fallback '{$extracted['title']}' → VidSrc");
+                        return $vidsrc;
+                    }
+                }
+
                 return $this->resolveFromWebsite($url);
             }
 
@@ -549,7 +561,6 @@ class StreamResolverService
                 }
             }
 
-            // Fallback final
             // Fallback final: se slug é IMDB ID, usar VidSrc
             $slug = str_starts_with($link, 'movie2=') ? substr($link, 7)
                   : (str_starts_with($link, 'serie3=') ? substr($link, 7) : '');
@@ -557,6 +568,18 @@ class StreamResolverService
                 $vidsrc = $this->resolveVidSrc(trim($slug), str_starts_with($link, 'movie2=') ? 'movie' : 'tv');
                 if ($vidsrc) {
                     Log::info("StreamResolver: Overflix failed, VidSrc fallback for {$slug}");
+                    return $vidsrc;
+                }
+            }
+
+            // Fallback título final: extrai título do slug Overflix e busca IMDB ID
+            $slug = $slug ?: (str_starts_with($link, 'movie2=') ? substr($link, 7) : substr($link, 7));
+            $mediaType = str_starts_with($link, 'movie2=') ? 'movie' : 'tv';
+            $extracted = $this->extractTitleFromSlug($slug);
+            if (!empty($extracted['title'])) {
+                $vidsrc = $this->resolveByTitle($extracted['title'], $extracted['year'], $mediaType);
+                if ($vidsrc) {
+                    Log::info("StreamResolver: Overflix failed, title-lookup fallback '{$extracted['title']}' → VidSrc");
                     return $vidsrc;
                 }
             }
@@ -1073,6 +1096,17 @@ class StreamResolverService
             }
         }
 
+        // Fallback: tenta extrair título do slug e buscar IMDB ID
+        $mediaType = str_contains($requestType, 'mv') ? 'movie' : 'tv';
+        $extracted = $this->extractTitleFromSlug($slug);
+        if (!empty($extracted['title'])) {
+            $vidsrc = $this->resolveByTitle($extracted['title'], $extracted['year'], $mediaType);
+            if ($vidsrc) {
+                Log::info("StreamResolver: API failed, title-lookup fallback '{$extracted['title']}' → VidSrc");
+                return $vidsrc;
+            }
+        }
+
         if ($maintenanceCount > 0) {
             $this->lastFailureReason = 'maintenance';
         }
@@ -1164,6 +1198,109 @@ class StreamResolverService
         }
 
         return null;
+    }
+
+    /**
+     * Extrai título e ano de um slug de conteúdo (BrazucaPlay / Overflix).
+     * Formatos conhecidos:
+     *   assistir-anaconda-legendado-2025-65577  → ["anaconda", 2025]
+     *   assistir-1-contra-todos-dublado-2016-46495 → ["1 contra todos", 2016]
+     *   1-contra-todos                         → ["1 contra todos", null]
+     *   serie/67158  / series#12793            → ["", null] (ID numérico, sem título)
+     *
+     * @return array{title: string, year: int|null}
+     */
+    private function extractTitleFromSlug(string $slug): array
+    {
+        $title = $slug;
+
+        // IDs numéricos (serie/67158, series#12793) → não tem título
+        if (preg_match('/[#\/]/', $title)) {
+            return ['title' => '', 'year' => null];
+        }
+
+        // Remove 'assistir-' prefix
+        $title = preg_replace('/^assistir-/', '', $title);
+
+        // Remove '-u\d-' disambiguation suffixes
+        $title = preg_replace('/-u\d+-/', '-', $title);
+
+        $year = null;
+
+        // Padrão: -dublado-2025-65577 ou -legendado-2025-65577
+        if (preg_match('/^(.+?)-(dublado|legendado|dual)-(\d{4})-\d+$/', $title, $m)) {
+            $title = $m[1];
+            $year  = (int) $m[3];
+        }
+        // Padrão sem "dublado/legendado": -2025-65577
+        elseif (preg_match('/^(.+?)-(\d{4})-\d+$/', $title, $m)) {
+            $title = $m[1];
+            $year  = (int) $m[2];
+        }
+
+        // URL-decode e converte hífens em espaços
+        $title = urldecode($title);
+        $title = str_replace('-', ' ', $title);
+        $title = trim(preg_replace('/\s+/', ' ', $title));
+
+        return ['title' => $title, 'year' => $year];
+    }
+
+    /**
+     * Busca IMDB ID via IMDB Suggestion API (gratuita, sem chave) e resolve via VidSrc.
+     * Endpoint: https://sg.media-imdb.com/suggestion/{letra}/{title}.json
+     */
+    private function resolveByTitle(string $title, ?int $year = null, string $mediaType = 'movie'): ?array
+    {
+        if (empty($title) || mb_strlen($title) < 2) return null;
+
+        $cacheKey = 'imdb_id_' . md5(strtolower($title) . '_' . ($year ?? '') . '_' . $mediaType);
+
+        $imdbId = Cache::remember($cacheKey, 86400, function () use ($title, $year) {
+            try {
+                // IMDB Suggestion API usa a primeira letra do título como path
+                $firstChar = strtolower(preg_replace('/[^a-z]/i', '', $title)[0] ?? 'a');
+                $encoded   = rawurlencode(strtolower($title));
+                $url       = "https://sg.media-imdb.com/suggestion/{$firstChar}/{$encoded}.json";
+
+                Log::info("StreamResolver: IMDB suggestion lookup for '{$title}' → {$url}");
+
+                $response = Http::timeout(8)
+                    ->withHeaders(['User-Agent' => $this->userAgent])
+                    ->get($url);
+
+                if (!$response->successful()) return null;
+
+                $results = $response->json('d') ?? [];
+
+                // Filtra por ano (±1 ano de tolerância) e escolhe o primeiro resultado válido
+                foreach ($results as $result) {
+                    $id         = $result['id'] ?? null;
+                    $resultYear = $result['y'] ?? null;
+
+                    if (!$id || !preg_match('/^tt\d+$/', $id)) continue;
+                    if ($year && $resultYear && abs((int) $resultYear - $year) > 1) continue;
+
+                    Log::info("StreamResolver: IMDB found '{$title}' ({$year}) → {$id}");
+                    return $id;
+                }
+
+                // Sem match de ano → primeiro resultado com ID válido
+                foreach ($results as $result) {
+                    $id = $result['id'] ?? null;
+                    if ($id && preg_match('/^tt\d+$/', $id)) return $id;
+                }
+
+                return null;
+            } catch (\Throwable $e) {
+                Log::debug("StreamResolver: IMDB suggestion failed for '{$title}': {$e->getMessage()}");
+                return null;
+            }
+        });
+
+        if (!$imdbId) return null;
+
+        return $this->resolveVidSrc($imdbId, $mediaType);
     }
 
     /**

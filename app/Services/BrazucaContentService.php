@@ -567,10 +567,15 @@ class BrazucaContentService
     {
         $sources = [];
 
+        // Strip #series_list= and #movies_list= prefixes (BrazucaPlay internal format)
+        $link = preg_replace('/^#(?:series|movies)_list=/', '', $link);
+
         if (str_contains($link, '|')) {
             // Múltiplos sources separados por |
             $parts = explode('|', $link);
             foreach ($parts as $idx => $part) {
+                // Skip any remaining # prefixed parts (sub-list markers)
+                $part = preg_replace('/^#[a-z_]+=/', '', trim($part));
                 $sources[] = $this->parseSourceLink(trim($part), $idx + 1);
             }
         } else {
@@ -604,6 +609,32 @@ class BrazucaContentService
             return [
                 'type' => 'resolver',
                 'label' => "Servidor {$m[1]} (Opção {$index})",
+                'resolver' => "resolver{$m[1]}",
+                'slug' => $m[2],
+                'url' => $link,
+                'host' => "API Resolver {$m[1]}",
+                'link' => $link,
+            ];
+        }
+
+        // resolver1_mv=slug (filmes)
+        if (preg_match('/^resolver(\d+)_mv=(.+)$/', $link, $m)) {
+            return [
+                'type' => 'resolver',
+                'label' => "Servidor {$m[1]} - Filme (Opção {$index})",
+                'resolver' => "resolver{$m[1]}",
+                'slug' => $m[2],
+                'url' => $link,
+                'host' => "API Resolver {$m[1]}",
+                'link' => $link,
+            ];
+        }
+
+        // resolver1_episodes=slug (episódios)
+        if (preg_match('/^resolver(\d+)_episodes=(.+)$/', $link, $m)) {
+            return [
+                'type' => 'resolver',
+                'label' => "Servidor {$m[1]} - Episódio (Opção {$index})",
                 'resolver' => "resolver{$m[1]}",
                 'slug' => $m[2],
                 'url' => $link,
