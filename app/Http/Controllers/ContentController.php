@@ -316,7 +316,19 @@ class ContentController extends Controller
         }
 
         if (!$stream) {
-            return back()->with('error', 'Não foi possível resolver o stream. Tente outra fonte.');
+            Log::warning("Play: Could not resolve stream for link: {$link}");
+
+            // Verifica tipo do link para dar feedback melhor
+            $linkType = 'desconhecido';
+            if (str_starts_with($link, 'wvmob=') || str_starts_with($link, 'wovy=')) $linkType = 'WOVY';
+            elseif (str_starts_with($link, 'overflix=') || str_starts_with($link, 'serie3=') || str_starts_with($link, 'movie2=')) $linkType = 'Overflix';
+            elseif (str_starts_with($link, 'bunnycdn')) $linkType = 'BunnyCDN';
+            elseif (str_starts_with($link, 'doramas')) $linkType = 'DoramasOnline';
+            elseif (str_starts_with($link, 'chresolver1=')) $linkType = 'IPTV';
+            elseif (str_starts_with($link, 'pluto=')) $linkType = 'PlutoTV';
+            elseif (str_starts_with($link, 'resolver')) $linkType = 'API Resolver';
+
+            return back()->with('error', "Não foi possível resolver o stream ({$linkType}). O servidor pode estar offline ou o conteúdo foi removido. Tente outra fonte.");
         }
 
         $proxyUrl = url('/conteudo/proxy/' . base64_encode($stream['url']));

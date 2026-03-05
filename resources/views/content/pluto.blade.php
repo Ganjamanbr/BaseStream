@@ -24,7 +24,7 @@
 
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 @foreach ($channels as $ch)
-                    <a href="{{ route('content.play', ['d' => \App\Http\Controllers\ContentController::encodeItem(['name' => $ch['name'], 'link' => $ch['url'], 'thumbnail' => $ch['thumbnail'] ?? ''], 'pluto')]) }}"
+                    <a href="{{ route('content.play', ['d' => \App\Http\Controllers\ContentController::encodeItem(['name' => $ch['name'], 'link' => $ch['link'], 'thumbnail' => $ch['thumbnail'] ?? ''], 'pluto')]) }}"
                        class="card-hover glass rounded-xl border border-purple-500/10 p-3 flex flex-col items-center text-center group">
 
                         <div class="w-14 h-14 rounded-lg overflow-hidden mb-2 flex-shrink-0">
