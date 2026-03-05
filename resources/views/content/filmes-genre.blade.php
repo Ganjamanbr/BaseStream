@@ -15,7 +15,7 @@
 @else
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
         @foreach ($movies as $movie)
-            <a href="{{ route('content.details', ['name' => $movie['name'], 'link' => $movie['link'], 'thumbnail' => $movie['thumbnail'] ?? '', 'fanart' => $movie['fanart'] ?? '', 'info' => $movie['info'] ?? '', 'category' => 'filmes']) }}"
+            <a href="{{ route('content.details', ['d' => \App\Http\Controllers\ContentController::encodeItem($movie, 'filmes')]) }}"
                class="card-hover glass rounded-xl border border-purple-500/10 overflow-hidden group">
                 <div class="aspect-[2/3] relative overflow-hidden">
                     @if (!empty($movie['thumbnail']))

@@ -24,10 +24,10 @@
             @endphp
 
             @if ($hasDirectStream)
-                <a href="{{ route('content.play', ['link' => $link, 'name' => $ch['name'], 'thumbnail' => $ch['thumbnail'] ?? '']) }}"
+                <a href="{{ route('content.play', ['d' => \App\Http\Controllers\ContentController::encodeItem($ch, 'tv')]) }}"
                    class="card-hover glass rounded-xl border border-purple-500/10 p-3 flex flex-col items-center text-center group">
             @else
-                <a href="{{ route('content.details', ['name' => $ch['name'], 'link' => $link, 'thumbnail' => $ch['thumbnail'] ?? '', 'category' => 'tv']) }}"
+                <a href="{{ route('content.details', ['d' => \App\Http\Controllers\ContentController::encodeItem($ch, 'tv')]) }}"
                    class="card-hover glass rounded-xl border border-purple-500/10 p-3 flex flex-col items-center text-center group">
             @endif
                     {{-- Logo --}}

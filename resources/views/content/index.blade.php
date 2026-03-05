@@ -19,9 +19,12 @@
 </div>
 
 {{-- Grid de categorias --}}
+@php
+    $routeMap = \App\Services\BrazucaContentService::CATEGORY_ROUTES;
+@endphp
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
     @foreach ($categories as $cat)
-        <a href="{{ $cat['route'] }}"
+        <a href="{{ route($routeMap[$cat['id']] ?? 'content.index') }}"
            class="card-hover glass rounded-2xl border border-purple-500/10 p-6 sm:p-8 text-center group">
             <div class="text-4xl sm:text-5xl mb-3">{{ $cat['icon'] }}</div>
             <h2 class="text-lg font-semibold text-white group-hover:text-purple-300 transition-colors">

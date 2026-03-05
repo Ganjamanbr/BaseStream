@@ -203,6 +203,18 @@ class BrazucaContentService
     /**
      * Retorna as categorias principais do menu.
      */
+    /** Mapeamento de IDs de categoria para nomes de rota */
+    public const CATEGORY_ROUTES = [
+        'tv'       => 'content.tv',
+        'filmes'   => 'content.filmes',
+        'series'   => 'content.series',
+        'animes'   => 'content.animes',
+        'novelas'  => 'content.novelas',
+        'desenhos' => 'content.desenhos',
+        'doramas'  => 'content.doramas',
+        'pluto'    => 'content.pluto',
+    ];
+
     public function getCategories(): array
     {
         return [
@@ -211,56 +223,48 @@ class BrazucaContentService
                 'name' => 'TV AO VIVO',
                 'icon' => '📺',
                 'description' => 'Canais brasileiros ao vivo',
-                'route' => route('content.tv'),
             ],
             [
                 'id' => 'filmes',
                 'name' => 'FILMES',
                 'icon' => '🎬',
                 'description' => 'Filmes por gênero',
-                'route' => route('content.filmes'),
             ],
             [
                 'id' => 'series',
                 'name' => 'SÉRIES',
                 'icon' => '📺',
                 'description' => 'Séries e temporadas',
-                'route' => route('content.series'),
             ],
             [
                 'id' => 'animes',
                 'name' => 'ANIMES',
                 'icon' => '🎌',
                 'description' => 'Animes legendados e dublados',
-                'route' => route('content.animes'),
             ],
             [
                 'id' => 'novelas',
                 'name' => 'NOVELAS',
                 'icon' => '💃',
                 'description' => 'Novelas brasileiras',
-                'route' => route('content.novelas'),
             ],
             [
                 'id' => 'desenhos',
                 'name' => 'DESENHOS',
                 'icon' => '🧸',
                 'description' => 'Desenhos e cartoons',
-                'route' => route('content.desenhos'),
             ],
             [
                 'id' => 'doramas',
                 'name' => 'DORAMAS',
                 'icon' => '🇰🇷',
                 'description' => 'Doramas coreanos',
-                'route' => route('content.doramas'),
             ],
             [
                 'id' => 'pluto',
                 'name' => 'PLUTO TV',
                 'icon' => '🆓',
                 'description' => 'Canais gratuitos',
-                'route' => route('content.pluto'),
             ],
         ];
     }

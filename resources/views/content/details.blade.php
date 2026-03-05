@@ -44,7 +44,7 @@
 @if (empty($sources))
     {{-- Sem fontes parseadas, tenta link direto --}}
     <div class="glass rounded-xl border border-purple-500/10 p-4">
-        <a href="{{ route('content.play', ['link' => $link, 'name' => $name, 'thumbnail' => $thumbnail ?? '']) }}"
+        <a href="{{ route('content.play', ['d' => \App\Http\Controllers\ContentController::encodeItem(['name' => $name, 'link' => $link, 'thumbnail' => $thumbnail ?? ''])]) }}"
            class="flex items-center gap-3 hover:bg-purple-500/10 rounded-lg p-2 transition-colors">
             <span class="text-2xl">▶️</span>
             <div>
@@ -56,7 +56,7 @@
 @else
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         @foreach ($sources as $i => $source)
-            <a href="{{ route('content.play', ['link' => $source['url'], 'name' => $name . ' - Fonte ' . ($i + 1), 'thumbnail' => $thumbnail ?? '']) }}"
+            <a href="{{ route('content.play', ['d' => \App\Http\Controllers\ContentController::encodeItem(['name' => $name . ' - Fonte ' . ($i + 1), 'link' => $source['url'], 'thumbnail' => $thumbnail ?? ''])]) }}"
                class="card-hover glass rounded-xl border border-purple-500/10 p-4 flex items-center gap-3 group">
                 <span class="text-2xl">▶️</span>
                 <div class="flex-1 min-w-0">

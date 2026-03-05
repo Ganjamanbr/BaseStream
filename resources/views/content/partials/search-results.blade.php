@@ -10,7 +10,7 @@
 
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
         @foreach ($results as $item)
-            <a href="{{ route('content.details', ['name' => $item['name'], 'link' => $item['link'], 'thumbnail' => $item['thumbnail'] ?? '', 'fanart' => $item['fanart'] ?? '', 'category' => $item['category'] ?? '']) }}"
+            <a href="{{ route('content.details', ['d' => \App\Http\Controllers\ContentController::encodeItem($item, $item['category'] ?? '')]) }}"
                class="card-hover glass rounded-xl border border-purple-500/10 overflow-hidden group">
                 <div class="aspect-[2/3] relative overflow-hidden">
                     @if (!empty($item['thumbnail']))
