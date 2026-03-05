@@ -128,6 +128,14 @@ class DashboardController extends Controller
         return view('dashboard.tokens', compact('tokens', 'maxTokens'));
     }
 
+    /**
+     * GET /dashboard/vlc — Guia de configuração VLC/IPTV players
+     */
+    public function vlcGuide()
+    {
+        return view('dashboard.vlc-guide');
+    }
+
     private function calculateSuccessRate(int $userId): float
     {
         $total = StreamLog::whereHas('apiToken', fn($q) => $q->where('user_id', $userId))

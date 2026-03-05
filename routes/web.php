@@ -32,6 +32,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/logs/partial', [DashboardController::class, 'logsPartial'])->name('dashboard.logs.partial');
     Route::get('/dashboard/stats', [DashboardController::class, 'stats'])->name('dashboard.stats.partial');
     Route::get('/dashboard/tokens', [DashboardController::class, 'tokens'])->name('dashboard.tokens');
+    Route::get('/dashboard/vlc', [DashboardController::class, 'vlcGuide'])->name('dashboard.vlc');
 });
 
 // Conteúdo (auth required)
