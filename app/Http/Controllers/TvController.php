@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\BrazucaContentService;
 use App\Services\StreamResolverService;
+use App\Services\VideoCodecService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -37,6 +38,7 @@ class TvController extends Controller
     public function __construct(
         private BrazucaContentService $content,
         private StreamResolverService  $resolver,
+        private VideoCodecService      $codec,
     ) {}
 
     // ─── Auth helpers ───────────────────────────────────────────────────────
@@ -293,10 +295,28 @@ class TvController extends Controller
             return response()->json(['error' => 'Stream indisponível'], 404);
         }
 
+        $streamUrl  = $stream['url'];
+        $streamType = $stream['type'] ?? 'hls';
+
+        // For HLS streams, probe codec asynchronously via cache
+        // (ffprobe with 5s timeout — skipped for iframe sources)
+        $codecInfo = ['video_codec' => 'unknown', 'needs_transcode' => false, 'error' => 'skipped'];
+        if ($streamType === 'hls') {
+            try {
+                $codecInfo = $this->codec->probe($streamUrl, timeout: 5);
+            } catch (\Throwable $e) {
+                Log::debug("TvController codec probe failed: {$e->getMessage()}");
+            }
+        }
+
         return response()->json([
-            'type'    => $stream['type'] ?? 'hls',
-            'url'     => $stream['url'],
-            'headers' => $stream['headers'] ?? [],
+            'type'            => $streamType,
+            'url'             => $streamUrl,
+            'headers'         => $stream['headers'] ?? [],
+            'codec'           => $codecInfo['video_codec'] ?? 'unknown',
+            'audio_codec'     => $codecInfo['audio_codec'] ?? 'unknown',
+            'needs_transcode' => $codecInfo['needs_transcode'] ?? false,
+            'transcode_start' => url('/api/transcode/start'),
         ]);
     }
 }

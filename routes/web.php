@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\XtreamController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ContentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TranscoderController;
 use App\Http\Controllers\TvController;
 use Illuminate\Support\Facades\Route;
 
@@ -130,8 +131,27 @@ Route::prefix('tv')->name('tv.')->group(function () {
     Route::get('/doramas',  [TvController::class, 'doramas'])->name('doramas');
     Route::get('/player',   [TvController::class, 'player'])->name('player');
 
-    // AJAX resolve
+    // AJAX resolve + codec probe
     Route::post('/resolve', [TvController::class, 'resolve'])->name('resolve');
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Video Transcoder — FFmpeg live HLS transcode para streams incompatíveis
+// Converte H.265/HEVC, AC3, EAC3 → H.264 + AAC para Tizen/Smart TVs
+// ─────────────────────────────────────────────────────────────────────────
+
+// API: start / stop / probe — requerem auth (sessão TV ou Bearer token)
+Route::prefix('api/transcode')->name('transcode.')->group(function () {
+    Route::post('/start',    [TranscoderController::class, 'start'])->name('start');
+    Route::post('/probe',    [TranscoderController::class, 'probe'])->name('probe');
+    Route::delete('/{hash}', [TranscoderController::class, 'stop'])->name('stop');
+});
+
+// HLS segment/playlist serving — público por hash opaco
+Route::prefix('stream/hls/{hash}')->group(function () {
+    Route::get('/playlist.m3u8', [TranscoderController::class, 'playlist'])->name('transcode.playlist');
+    Route::get('/{segment}',     [TranscoderController::class, 'segment'])->name('transcode.segment')
+         ->where('segment', '\d{5}');
 });
 
 // ─────────────────────────────────────────────────────────────────────────

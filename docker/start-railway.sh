@@ -11,6 +11,7 @@ sed -i "s/listen 80;/listen $LISTEN_PORT;/" /etc/nginx/conf.d/basestream.conf
 
 # Ensure storage directories have correct permissions FIRST
 echo "[1/5] Setting permissions..."
+mkdir -p /var/www/html/storage/app/transcode
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
