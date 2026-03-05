@@ -75,6 +75,10 @@
                 {{-- Nav links --}}
                 <div class="flex items-center space-x-1 sm:space-x-2">
                     @auth
+                        <a href="{{ route('content.index') }}"
+                           class="px-3 py-2 rounded-lg text-sm hover:bg-purple-500/20 transition-colors {{ request()->routeIs('content.*') ? 'bg-purple-500/20 text-white' : 'text-gray-400' }}">
+                            Conteúdo
+                        </a>
                         <a href="{{ route('dashboard') }}"
                            class="px-3 py-2 rounded-lg text-sm hover:bg-purple-500/20 transition-colors {{ request()->routeIs('dashboard') ? 'bg-purple-500/20 text-white' : 'text-gray-400' }}">
                             Overview

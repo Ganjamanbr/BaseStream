@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\ContentController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +32,25 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/logs/partial', [DashboardController::class, 'logsPartial'])->name('dashboard.logs.partial');
     Route::get('/dashboard/stats', [DashboardController::class, 'stats'])->name('dashboard.stats.partial');
     Route::get('/dashboard/tokens', [DashboardController::class, 'tokens'])->name('dashboard.tokens');
+});
+
+// Conteúdo (auth required)
+Route::middleware('auth')->prefix('conteudo')->name('content.')->group(function () {
+    Route::get('/', [ContentController::class, 'index'])->name('index');
+    Route::get('/tv', [ContentController::class, 'tv'])->name('tv');
+    Route::get('/pluto', [ContentController::class, 'plutoTv'])->name('pluto');
+    Route::get('/filmes', [ContentController::class, 'filmes'])->name('filmes');
+    Route::get('/filmes/lancamentos', [ContentController::class, 'filmesLancamentos'])->name('filmes.lancamentos');
+    Route::get('/filmes/{genero}', [ContentController::class, 'filmesByGenre'])->name('filmes.genre');
+    Route::get('/series', [ContentController::class, 'series'])->name('series');
+    Route::get('/animes', [ContentController::class, 'animes'])->name('animes');
+    Route::get('/novelas', [ContentController::class, 'novelas'])->name('novelas');
+    Route::get('/desenhos', [ContentController::class, 'desenhos'])->name('desenhos');
+    Route::get('/doramas', [ContentController::class, 'doramas'])->name('doramas');
+    Route::get('/busca', [ContentController::class, 'search'])->name('search');
+    Route::get('/detalhes', [ContentController::class, 'details'])->name('details');
+    Route::get('/play', [ContentController::class, 'play'])->name('play');
+    Route::get('/proxy/{url}', [ContentController::class, 'proxy'])->name('proxy')->where('url', '.*');
 });
 
 // Health check (production monitoring)
