@@ -14,45 +14,37 @@
         <p class="text-gray-400 text-lg">Nenhum canal disponível.</p>
     </div>
 @else
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-        @foreach ($channels as $ch)
-            @php
-                $link = $ch['link'] ?? '';
-                $hasDirectStream = str_contains($link, 'chresolver1=')
-                    || str_contains($link, 'pluto=')
-                    || preg_match('/^https?:\/\/.+\.(m3u8|ts|mp4)/i', $link);
-            @endphp
+    @foreach ($channels as $categoryName => $categoryChannels)
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold text-purple-300 mb-4 flex items-center gap-2">
+                <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                {{ $categoryName }}
+                <span class="text-xs text-gray-500 font-normal">({{ count($categoryChannels) }} canais)</span>
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                @foreach ($categoryChannels as $ch)
+                    <a href="{{ route('content.play', ['d' => \App\Http\Controllers\ContentController::encodeItem($ch, 'tv')]) }}"
+                       class="card-hover glass rounded-xl border border-purple-500/10 p-3 flex flex-col items-center text-center group">
+                        {{-- Logo --}}
+                        <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden mb-2 flex-shrink-0">
+                            @if (!empty($ch['thumbnail']))
+                                <img src="{{ $ch['thumbnail'] }}"
+                                     alt="{{ $ch['name'] }}"
+                                     class="w-full h-full object-contain bg-black/30"
+                                     loading="lazy"
+                                     onerror="this.parentElement.innerHTML='<div class=\'w-full h-full thumb-fallback flex items-center justify-center text-2xl\'>📺</div>';">
+                            @else
+                                <div class="w-full h-full thumb-fallback flex items-center justify-center text-2xl">📺</div>
+                            @endif
+                        </div>
 
-            @if ($hasDirectStream)
-                <a href="{{ route('content.play', ['d' => \App\Http\Controllers\ContentController::encodeItem($ch, 'tv')]) }}"
-                   class="card-hover glass rounded-xl border border-purple-500/10 p-3 flex flex-col items-center text-center group">
-            @else
-                <a href="{{ route('content.details', ['d' => \App\Http\Controllers\ContentController::encodeItem($ch, 'tv')]) }}"
-                   class="card-hover glass rounded-xl border border-purple-500/10 p-3 flex flex-col items-center text-center group">
-            @endif
-                    {{-- Logo --}}
-                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden mb-2 flex-shrink-0">
-                        @if (!empty($ch['thumbnail']))
-                            <img src="{{ $ch['thumbnail'] }}"
-                                 alt="{{ $ch['name'] }}"
-                                 class="w-full h-full object-contain bg-black/30"
-                                 loading="lazy"
-                                 onerror="this.parentElement.innerHTML='<div class=\'w-full h-full thumb-fallback flex items-center justify-center text-2xl\'>📺</div>';">
-                        @else
-                            <div class="w-full h-full thumb-fallback flex items-center justify-center text-2xl">📺</div>
-                        @endif
-                    </div>
-
-                    <p class="text-xs sm:text-sm font-medium text-gray-200 line-clamp-2">{{ $ch['name'] }}</p>
-
-                    @if ($hasDirectStream)
+                        <p class="text-xs sm:text-sm font-medium text-gray-200 line-clamp-2">{{ $ch['name'] }}</p>
                         <span class="mt-1 text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">AO VIVO</span>
-                    @else
-                        <span class="mt-1 text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">CATEGORIA</span>
-                    @endif
-                </a>
-        @endforeach
-    </div>
+                    </a>
+                @endforeach
+            </div>
+        </div>
+    @endforeach
 @endif
 
 @endsection

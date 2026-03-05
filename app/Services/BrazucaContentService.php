@@ -279,13 +279,61 @@ class BrazucaContentService
             return [];
         }
 
-        // O channels.xml contém <channel> blocks organizados
-        // com sub-categorias dentro de expandedlink/externallink
-        $allItems = $this->parseChannelsXml($xml);
+        // channels.xml organiza canais em <channel_1>, <channel_2>, <channel_3>
+        // cada um contendo <item> tags com title/link/thumbnail/epgid
+        $categorized = [];
 
-        // Filtra apenas links diretos de canal (chresolver1=xxx)
-        // e links de sub-listas (ex: #channel_1, category=xxx)
-        return $allItems;
+        // Mapeia channel_N para nomes amigáveis baseados nos servers IPTV
+        $channelLabels = [
+            'channel_1' => 'Servidor 1',
+            'channel_2' => 'Servidor 2',
+            'channel_3' => 'Servidor 3',
+        ];
+
+        foreach ($channelLabels as $tag => $label) {
+            if (preg_match("/<{$tag}>(.*?)<\/{$tag}>/s", $xml, $catMatch)) {
+                $items = $this->parseItemsXml($catMatch[1]);
+                if (!empty($items)) {
+                    // Agrupar por categoria visual baseada no nome do canal
+                    foreach ($items as $item) {
+                        // Pula separadores/headers (link='here')
+                        if (($item['link'] ?? '') === 'here') continue;
+                        $catName = $this->guessChannelCategory($item['name']);
+                        $categorized[$catName][] = $item;
+                    }
+                }
+            }
+        }
+
+        return $categorized;
+    }
+
+    /**
+     * Adivinha a categoria de um canal baseado no nome.
+     */
+    private function guessChannelCategory(string $name): string
+    {
+        $name = mb_strtoupper($name);
+
+        $patterns = [
+            'Esportes' => ['ESPN', 'SPORTV', 'SPORT', 'PREMIERE', 'COMBATE', 'DAZN', 'BAN SPORT', 'FOX SPORT', 'CASA DO ESPORTE'],
+            'Filmes & Séries' => ['HBO', 'TELECINE', 'STAR CHANNEL', 'MEGAPIX', 'AXN', 'FX', 'PARAMOUNT', 'UNIVERSAL', 'CINEMAX', 'AMC', 'TNT', 'SPACE', 'WARNER', 'A&E', 'STUDIO UNIVERSAL', 'SONY'],
+            'Infantil' => ['DISNEY', 'CARTOON', 'NICK', 'GLOOB', 'DISCOVERY KIDS', 'BABY TV', 'TOONCAST', 'BOOMERANG', 'ZOO MOO'],
+            'Notícias' => ['GLOBO NEWS', 'CNN', 'BAND NEWS', 'RECORD NEWS', 'JOVEM PAN', 'JP NEWS', 'BLOOMBERG'],
+            'Documentários' => ['DISCOVERY', 'NATIONAL GEO', 'NAT GEO', 'HISTORY', 'ANIMAL PLANET', 'CURTA!'],
+            'Canais Abertos' => ['GLOBO', 'SBT', 'RECORD', 'BAND', 'REDE TV', 'REDETV', 'TV CULTURA', 'TV BRASIL', 'FUTURA'],
+            'Músicas & Variedades' => ['MUSIC', 'MTV', 'VH1', 'BIS', 'MULTISHOW', 'HUMOR', 'COMEDY', 'GNT', 'WOOHOO', 'FOOD', 'TRAVEL', 'LIFETIME', 'TLC', 'HGTV', 'E!'],
+        ];
+
+        foreach ($patterns as $category => $keywords) {
+            foreach ($keywords as $keyword) {
+                if (str_contains($name, $keyword)) {
+                    return $category;
+                }
+            }
+        }
+
+        return 'Outros';
     }
 
     /**
@@ -438,7 +486,9 @@ class BrazucaContentService
         });
 
         if (!$xml) return [];
-        return $this->parseChannelsXml($xml);
+        // Genre XMLs usam <item> tags paginados em <page_N>
+        $items = $this->parseItemsXml($xml);
+        return array_values(array_filter($items, fn($item) => $item['link'] !== 'here'));
     }
 
     /**
@@ -448,7 +498,10 @@ class BrazucaContentService
     {
         $xml = $this->fetchGist('lancamentos');
         if (!$xml) return [];
-        return $this->parseChannelsXml($xml);
+        // lancamentos.xml usa <item> tags, não <channel>
+        $items = $this->parseItemsXml($xml);
+        // Filtra itens com link "here" (são separadores/headers)
+        return array_values(array_filter($items, fn($item) => $item['link'] !== 'here'));
     }
 
     /**
@@ -458,7 +511,10 @@ class BrazucaContentService
     {
         $xml = $this->fetchGist('movies');
         if (!$xml) return [];
-        return $this->parseChannelsXml($xml);
+        // page.xml usa <item> tags paginados em <page_N>
+        $items = $this->parseItemsXml($xml);
+        // Filtra itens com link "here" (são separadores/headers de navegação)
+        return array_values(array_filter($items, fn($item) => $item['link'] !== 'here'));
     }
 
     /**
@@ -468,25 +524,32 @@ class BrazucaContentService
     {
         $query = mb_strtolower($query);
         $results = [];
+        $maxPerCategory = 50;
 
-        // Busca em cada categoria
+        // Busca em cada categoria (exclui filmes geral - 15MB de XML)
         $categories = [
-            'series'   => ['method' => 'getSeries', 'type' => 'Série'],
-            'filmes'   => ['method' => 'getMovies', 'type' => 'Filme'],
-            'animes'   => ['method' => 'getAnimes', 'type' => 'Anime'],
-            'novelas'  => ['method' => 'getNovelas', 'type' => 'Novela'],
-            'desenhos' => ['method' => 'getDesenhos', 'type' => 'Desenho'],
-            'doramas'  => ['method' => 'getDoramas', 'type' => 'Dorama'],
+            'series'      => ['method' => 'getSeries', 'type' => 'Série'],
+            'animes'      => ['method' => 'getAnimes', 'type' => 'Anime'],
+            'novelas'     => ['method' => 'getNovelas', 'type' => 'Novela'],
+            'desenhos'    => ['method' => 'getDesenhos', 'type' => 'Desenho'],
+            'doramas'     => ['method' => 'getDoramas', 'type' => 'Dorama'],
+            'lancamentos' => ['method' => 'getMovieLancamentos', 'type' => 'Filme'],
         ];
 
         foreach ($categories as $catId => $config) {
-            $items = $this->{$config['method']}();
-            foreach ($items as $item) {
-                if (str_contains(mb_strtolower($item['name']), $query)) {
-                    $item['category'] = $catId;
-                    $item['type'] = $config['type'];
-                    $results[] = $item;
+            try {
+                $items = $this->{$config['method']}();
+                $count = 0;
+                foreach ($items as $item) {
+                    if (str_contains(mb_strtolower($item['name'] ?? ''), $query)) {
+                        $item['category'] = $catId;
+                        $item['type'] = $config['type'];
+                        $results[] = $item;
+                        if (++$count >= $maxPerCategory) break;
+                    }
                 }
+            } catch (\Throwable $e) {
+                Log::warning("BrazucaContent: Search error in {$catId}: " . $e->getMessage());
             }
         }
 
@@ -610,6 +673,19 @@ class BrazucaContentService
                 'slug' => substr($link, 15),
                 'url' => $link,
                 'host' => 'DoramasOnline',
+                'link' => $link,
+            ];
+        }
+
+        // movie2=slug (filme via API resolver)
+        if (str_starts_with($link, 'movie2=')) {
+            return [
+                'type' => 'resolver',
+                'label' => "Filme (Opção {$index})",
+                'resolver' => 'movie2',
+                'slug' => substr($link, 7),
+                'url' => $link,
+                'host' => 'API Resolver',
                 'link' => $link,
             ];
         }

@@ -91,19 +91,7 @@ class ContentController extends Controller
             $channels = [];
         }
 
-        $directChannels = array_filter($channels, function ($ch) {
-            return str_contains($ch['link'] ?? '', 'chresolver1=')
-                || str_contains($ch['link'] ?? '', 'pluto=')
-                || preg_match('/^https?:\/\/.+\.m3u8/i', $ch['link'] ?? '');
-        });
-
-        $categoryChannels = array_filter($channels, function ($ch) {
-            return !str_contains($ch['link'] ?? '', 'chresolver1=')
-                && !str_contains($ch['link'] ?? '', 'pluto=')
-                && !preg_match('/^https?:\/\/.+\.m3u8/i', $ch['link'] ?? '');
-        });
-
-        return view('content.tv', compact('channels', 'directChannels', 'categoryChannels'));
+        return view('content.tv', compact('channels'));
     }
 
     /**
