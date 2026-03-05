@@ -332,7 +332,9 @@ class ContentController extends Controller
             return back()->with('error', "Não foi possível resolver o stream ({$linkType}). O servidor pode estar offline ou o conteúdo foi removido. Tente outra fonte.");
         }
 
-        $proxyUrl = url('/conteudo/proxy/' . base64_encode($stream['url']));
+        $proxyUrl = ($stream['type'] ?? '') === 'iframe'
+            ? $stream['url']
+            : url('/conteudo/proxy/' . base64_encode($stream['url']));
 
         // Armazena os headers customizados para o proxy usar
         if (!empty($stream['headers'])) {

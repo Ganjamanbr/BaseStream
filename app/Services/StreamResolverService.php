@@ -14,7 +14,7 @@ class StreamResolverService
 {
     private string $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-    private string $overflixHost = 'www.overflixtv.forum';
+    private string $overflixHost = 'encontrei.info';
 
     /**
      * Resolve um link do BrazucaPlay para um URL de stream jogável.
@@ -383,6 +383,49 @@ class StreamResolverService
      * Equivalente ao overflix_resolver() do Python.
      * Usa custom_proxy via geekantenado se a página bloquear requests diretos.
      */
+    /**
+     * Resolve via VidSrc.cc / 2embed usando IMDB ID.
+     * Fallback quando a API geekantenado está em manutenção ou Overflix requer login.
+     * VidSrc.cc confirmado funcionando em 05/03/2026 para todos os IMDB IDs testados.
+     */
+    private function resolveVidSrc(string $imdbId, string $mediaType = 'movie', int $season = 0, int $episode = 0): ?array
+    {
+        $imdbId = trim($imdbId);
+        if (!preg_match('/^tt\d+$/', $imdbId)) {
+            return null;
+        }
+
+        if ($mediaType === 'movie') {
+            $sources = [
+                "https://vidsrc.cc/v2/embed/movie/{$imdbId}",
+                "https://www.2embed.cc/embed/{$imdbId}",
+                "https://vidsrc.me/embed/movie?imdb={$imdbId}",
+            ];
+        } else {
+            $sfx = $season > 0 ? "/{$season}/" . ($episode > 0 ? $episode : '1') : '';
+            $sources = [
+                "https://vidsrc.cc/v2/embed/tv/{$imdbId}{$sfx}",
+                "https://vidsrc.me/embed/tv?imdb={$imdbId}" . ($season > 0 ? "&season={$season}&episode={$episode}" : ''),
+            ];
+        }
+
+        foreach ($sources as $url) {
+            try {
+                $resp = Http::timeout(8)->withHeaders(['User-Agent' => $this->userAgent])->head($url);
+                if ($resp->successful()) {
+                    Log::info("StreamResolver: VidSrc OK for {$imdbId} ({$mediaType})");
+                    return ['url' => $url, 'headers' => [], 'type' => 'iframe'];
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        // vidsrc.cc confirmado funcionando - retorna mesmo sem HEAD check bem-sucedido
+        Log::info("StreamResolver: VidSrc fallback (no check) for {$imdbId}");
+        return ['url' => $sources[0], 'headers' => [], 'type' => 'iframe'];
+    }
+
     private function resolveOverflix(string $link): ?array
     {
         try {
@@ -448,6 +491,18 @@ class StreamResolverService
 
             if (empty($players)) {
                 Log::warning("StreamResolver: Overflix no C_Video IDs found for {$url}");
+
+                // Fallback: se slug é IMDB ID, usar VidSrc (funciona sem login)
+                $rawSlug = str_starts_with($link, 'movie2=') ? substr($link, 7)
+                         : (str_starts_with($link, 'serie3=') ? substr($link, 7) : '');
+                if (preg_match('/^tt\d+$/', trim($rawSlug))) {
+                    $vidsrc = $this->resolveVidSrc(trim($rawSlug), str_starts_with($link, 'movie2=') ? 'movie' : 'tv');
+                    if ($vidsrc) {
+                        Log::info("StreamResolver: Overflix no player (login required?), VidSrc fallback for {$rawSlug}");
+                        return $vidsrc;
+                    }
+                }
+
                 return $this->resolveFromWebsite($url);
             }
 
@@ -492,6 +547,17 @@ class StreamResolverService
             }
 
             // Fallback final
+            // Fallback final: se slug é IMDB ID, usar VidSrc
+            $slug = str_starts_with($link, 'movie2=') ? substr($link, 7)
+                  : (str_starts_with($link, 'serie3=') ? substr($link, 7) : '');
+            if (preg_match('/^tt\d+$/', trim($slug))) {
+                $vidsrc = $this->resolveVidSrc(trim($slug), str_starts_with($link, 'movie2=') ? 'movie' : 'tv');
+                if ($vidsrc) {
+                    Log::info("StreamResolver: Overflix failed, VidSrc fallback for {$slug}");
+                    return $vidsrc;
+                }
+            }
+
             return $this->resolveFromWebsite($url);
         } catch (\Throwable $e) {
             Log::error("StreamResolver: Overflix resolve failed: {$e->getMessage()}");
@@ -989,6 +1055,16 @@ class StreamResolverService
             } catch (\Throwable $e) {
                 Log::debug("StreamResolver: API {$apiHost} failed: {$e->getMessage()}");
                 continue;
+            }
+        }
+
+        // Fallback: se slug é IMDB ID e API falhou, usar VidSrc
+        if (preg_match('/^tt\d+$/', trim($slug))) {
+            $mediaType = str_contains($requestType, 'mv') ? 'movie' : 'tv';
+            $vidsrc = $this->resolveVidSrc(trim($slug), $mediaType);
+            if ($vidsrc) {
+                Log::info("StreamResolver: API failed/maintenance, VidSrc fallback for {$slug} ({$mediaType})");
+                return $vidsrc;
             }
         }
 

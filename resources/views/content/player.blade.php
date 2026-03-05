@@ -69,10 +69,23 @@
             </div>
         </div>
 
-        <video id="videoPlayer" controls autoplay playsinline
-               @if(!empty($thumbnail)) poster="{{ $thumbnail }}" @endif>
-            Seu navegador não suporta vídeo HTML5.
-        </video>
+        @if(($stream['type'] ?? '') === 'iframe')
+            {{-- Iframe player (VidSrc.cc, 2embed, etc.) --}}
+            <iframe
+                id="iframePlayer"
+                src="{{ $stream['url'] }}"
+                width="100%"
+                style="height: 90vh; border: none; display: block; background: #000;"
+                allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+                allowfullscreen
+                referrerpolicy="no-referrer-when-downgrade">
+            </iframe>
+        @else
+            <video id="videoPlayer" controls autoplay playsinline
+                   @if(!empty($thumbnail)) poster="{{ $thumbnail }}" @endif>
+                Seu navegador não suporta vídeo HTML5.
+            </video>
+        @endif
     </div>
 
     {{-- Info --}}
@@ -108,8 +121,22 @@
         }
 
         function initPlayer() {
-            const url = proxyUrl || streamUrl;
             const comp = getComponent();
+
+            // Iframe (VidSrc.cc, 2embed, etc.) — já está carregando no src
+            if (streamType === 'iframe') {
+                const iframe = document.getElementById('iframePlayer');
+                if (iframe) {
+                    iframe.addEventListener('load', () => { comp.loading = false; });
+                    // Timeout de segurança
+                    setTimeout(() => { comp.loading = false; }, 5000);
+                } else {
+                    comp.loading = false;
+                }
+                return;
+            }
+
+            const url = proxyUrl || streamUrl;
 
             // Detecta se é HLS
             const isHls = streamType === 'hls' || url.includes('.m3u8') || streamUrl.includes('.m3u8');
