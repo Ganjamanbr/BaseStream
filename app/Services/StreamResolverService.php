@@ -37,6 +37,11 @@ class StreamResolverService
             ];
         }
 
+        // Known embed iframes (VidSrc, 2embed, etc.) → return as-is without scraping
+        if (preg_match('/^https:\/\/(vidsrc\.(cc|me|to|xyz)|www\.2embed\.cc|2embed\.cc)\//i', $link)) {
+            return ['url' => $link, 'headers' => [], 'type' => 'iframe'];
+        }
+
         // chresolver1=channel_slug → IPTV channel
         if (str_starts_with($link, 'chresolver1=')) {
             return $this->resolveIptv(substr($link, strlen('chresolver1=')));
@@ -128,6 +133,76 @@ class StreamResolverService
         }
 
         Log::warning("StreamResolver: unknown link type: {$link}");
+        return null;
+    }
+
+    /**
+     * Resolve apenas o IMDB ID a partir de um link de série/filme.
+     * Usado na página de detalhes para popular o seletor de episódios.
+     * Reutiliza o cache do lookup IMDB (produzido por resolveByTitle).
+     */
+    public function getImdbIdFromLink(string $link): ?string
+    {
+        // Strip #series_list= / #movies_list= prefixes
+        $link = preg_replace('/^#(?:series|movies)_list=/', '', $link);
+
+        // Pega o primeiro source da lista separada por |
+        $firstLink = trim(preg_replace('/^#[a-z_]+=/', '', explode('|', $link)[0]));
+
+        $slug      = null;
+        $mediaType = 'tv';
+
+        if      (preg_match('/^resolver\d+_tvshows=(.+)$/', $firstLink, $m))     { $slug = $m[1]; }
+        elseif  (preg_match('/^resolver\d+_mv=(.+)$/', $firstLink, $m))          { $slug = $m[1]; $mediaType = 'movie'; }
+        elseif  (preg_match('/^resolver\d+_episodes=(.+)$/', $firstLink, $m))    { $slug = $m[1]; }
+        elseif  (str_starts_with($firstLink, 'serie3='))                          { $slug = substr($firstLink, 7); }
+        elseif  (str_starts_with($firstLink, 'movie2='))                          { $slug = substr($firstLink, 7); $mediaType = 'movie'; }
+        elseif  (preg_match('/^(?:animes\d*|desenhos\d*|novelas\d*)=(.+)$/', $firstLink, $m)) { $slug = $m[1]; }
+
+        if (!$slug) return null;
+
+        // Já é IMDB ID
+        if (preg_match('/^tt\d+$/', $slug)) return $slug;
+
+        $extracted = $this->extractTitleFromSlug($slug);
+        if (empty($extracted['title'])) return null;
+
+        $cacheKey = 'imdb_id_' . md5(strtolower($extracted['title']) . '_' . ($extracted['year'] ?? '') . '_' . $mediaType);
+
+        // Retorna do cache se já foi resolvido anteriormente
+        if ($cached = Cache::get($cacheKey)) return $cached;
+
+        // Faz o lookup via IMDB Suggestion API e armazena em cache
+        try {
+            $title     = $extracted['title'];
+            $year      = $extracted['year'];
+            $firstChar = strtolower(preg_replace('/[^a-z]/i', '', $title)[0] ?? 'a');
+            $url       = "https://sg.media-imdb.com/suggestion/{$firstChar}/" . rawurlencode(strtolower($title)) . '.json';
+
+            $response = Http::timeout(8)->withHeaders(['User-Agent' => $this->userAgent])->get($url);
+            if (!$response->successful()) return null;
+
+            $results = $response->json('d') ?? [];
+
+            // Filtra por ano se disponível
+            foreach ($results as $result) {
+                $id         = $result['id'] ?? null;
+                $resultYear = $result['y']  ?? null;
+                if (!$id || !preg_match('/^tt\d+$/', $id)) continue;
+                if ($year && $resultYear && abs((int) $resultYear - $year) > 1) continue;
+                Cache::put($cacheKey, $id, 86400);
+                return $id;
+            }
+            // Fallback: primeiro resultado válido sem filtro de ano
+            foreach ($results as $result) {
+                $id = $result['id'] ?? null;
+                if ($id && preg_match('/^tt\d+$/', $id)) {
+                    Cache::put($cacheKey, $id, 86400);
+                    return $id;
+                }
+            }
+        } catch (\Throwable) {}
+
         return null;
     }
 

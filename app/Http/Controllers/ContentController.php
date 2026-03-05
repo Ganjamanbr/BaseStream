@@ -292,7 +292,21 @@ class ContentController extends Controller
             $sources = [];
         }
 
-        return view('content.details', compact('name', 'link', 'thumbnail', 'fanart', 'info', 'sources', 'category'));
+        // Para séries/animes/etc.: resolve o IMDB ID para montar o seletor de episódios
+        $seriesCategories = ['series', 'animes', 'novelas', 'desenhos', 'doramas'];
+        $isSeries = in_array($category, $seriesCategories)
+            || preg_match('/resolver\d+_(?:tvshows|episodes)=|^serie3=|^animes\d*=|^desenhos\d*=|^novelas\d*=/', $link);
+
+        $imdbId = null;
+        if ($isSeries) {
+            try {
+                $imdbId = $this->resolver->getImdbIdFromLink($link);
+            } catch (\Throwable $e) {
+                Log::warning("Details: could not resolve IMDB ID: {$e->getMessage()}");
+            }
+        }
+
+        return view('content.details', compact('name', 'link', 'thumbnail', 'fanart', 'info', 'sources', 'category', 'imdbId', 'isSeries'));
     }
 
     /**
