@@ -49,8 +49,11 @@ else
     echo "[4.5/5] Database already has $USER_COUNT users, skipping seed."
 fi
 
-# Cache configuration
+# Cache configuration (clear first to ensure fresh env vars)
 echo "[5/5] Caching configuration..."
+php artisan config:clear 2>&1 || true
+php artisan route:clear 2>&1 || true
+php artisan view:clear 2>&1 || true
 php artisan config:cache 2>&1 || true
 php artisan route:cache 2>&1 || true
 php artisan view:cache 2>&1 || true
