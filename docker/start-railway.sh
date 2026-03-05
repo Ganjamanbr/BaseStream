@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+# NOTE: no set -e — we handle errors manually so the container does not exit
+# before nginx is up and healthcheck can pass.
 
 echo "=== BaseStream Railway Startup ==="
 echo "DEBUG: PORT=$PORT, RAILWAY_PORT=$RAILWAY_PORT"
@@ -9,11 +10,15 @@ LISTEN_PORT=${PORT:-80}
 echo "[0/5] Configuring nginx to listen on port $LISTEN_PORT..."
 sed -i "s/listen 80;/listen $LISTEN_PORT;/" /etc/nginx/conf.d/basestream.conf
 
+# Validate nginx config before starting
+echo "[0/5] Validating nginx config..."
+nginx -t 2>&1 && echo "  nginx config OK" || echo "  WARNING: nginx config test failed (see above)"
+
 # Ensure storage directories have correct permissions FIRST
 echo "[1/5] Setting permissions..."
-mkdir -p /var/www/html/storage/app/transcode
-chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+mkdir -p /var/www/html/storage/app/transcode || true
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache || true
+chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache || true
 
 # Start supervisord EARLY so nginx responds to healthcheck while DB initializes
 echo "[2/5] Starting services (nginx + php-fpm)..."
@@ -21,7 +26,8 @@ echo "[2/5] Starting services (nginx + php-fpm)..."
 SUPERVISOR_PID=$!
 
 # Give nginx and php-fpm a moment to start
-sleep 3
+sleep 5
+echo "[2/5] Services started (supervisor PID=$SUPERVISOR_PID)"
 
 # Wait for database to be available (Railway provisions services async)
 echo "[3/5] Waiting for database..."
