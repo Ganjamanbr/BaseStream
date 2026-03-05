@@ -12,6 +12,22 @@ sed -i "s/listen 80;/listen ${LISTEN_PORT};/g" /etc/nginx/conf.d/basestream.conf
 
 # Create nginx cache directory required by proxy_cache_path
 mkdir -p /tmp/nginx_cache
+mkdir -p /var/log/nginx
+touch /var/log/nginx/access.log /var/log/nginx/error.log
+
+# Remove any conflicting default nginx configs that come with the Debian package
+rm -f /etc/nginx/sites-enabled/default
+rm -f /etc/nginx/conf.d/default.conf
+
+# Disable all dynamic nginx modules (avoid potential load failures)
+rm -f /etc/nginx/modules-enabled/*.conf 2>/dev/null || true
+
+# Test nginx config — prints the exact error if something is wrong
+echo "[init] Nginx conf files:"
+ls -la /etc/nginx/conf.d/ 2>&1
+ls -la /etc/nginx/modules-enabled/ 2>&1
+echo "[init] Testing nginx config..."
+nginx -t 2>&1
 
 # Storage / bootstrap permissions
 mkdir -p /var/www/html/storage/app/transcode \
