@@ -16,6 +16,12 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// Favicon (inline SVG — avoid 404 on /favicon.ico)
+Route::get('/favicon.ico', function () {
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="15" fill="#7C3AED"/><text x="50" y="68" font-size="50" fill="white" text-anchor="middle">📡</text></svg>';
+    return response($svg, 200)->header('Content-Type', 'image/svg+xml')->header('Cache-Control', 'public, max-age=604800');
+});
+
 // Auth (guest only)
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('web.login');
