@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\XtreamController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ContentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TvController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -105,6 +106,32 @@ Route::get('/health', function () {
 
     // Always return 200 so Railway healthcheck passes (status field indicates degradation)
     return response()->json($checks, 200);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Samsung Tizen / Smart TV Interface — /tv
+// Interface TV-first otimizada para controle remoto (D-pad).
+// Auth via credenciais Xtream Codes (geradas em /dashboard/iptv).
+// ─────────────────────────────────────────────────────────────────────────
+
+Route::prefix('tv')->name('tv.')->group(function () {
+    Route::get('/login',  [TvController::class, 'showLogin'])->name('login');
+    Route::post('/login', [TvController::class, 'login'])->name('login.post');
+    Route::get('/logout', [TvController::class, 'logout'])->name('logout');
+
+    // Content pages
+    Route::get('/',         [TvController::class, 'home'])->name('home');
+    Route::get('/ao-vivo',  [TvController::class, 'liveChannels'])->name('live');
+    Route::get('/filmes',   [TvController::class, 'movies'])->name('movies');
+    Route::get('/series',   [TvController::class, 'series'])->name('series');
+    Route::get('/animes',   [TvController::class, 'animes'])->name('animes');
+    Route::get('/novelas',  [TvController::class, 'novelas'])->name('novelas');
+    Route::get('/desenhos', [TvController::class, 'desenhos'])->name('desenhos');
+    Route::get('/doramas',  [TvController::class, 'doramas'])->name('doramas');
+    Route::get('/player',   [TvController::class, 'player'])->name('player');
+
+    // AJAX resolve
+    Route::post('/resolve', [TvController::class, 'resolve'])->name('resolve');
 });
 
 // ─────────────────────────────────────────────────────────────────────────

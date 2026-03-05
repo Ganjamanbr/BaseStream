@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BaseStream TV</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #060610;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Samsung One', 'Malgun Gothic', sans-serif;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .logo {
+            font-size: 5rem;
+            font-weight: 900;
+            letter-spacing: -2px;
+            margin-bottom: 2rem;
+        }
+
+        .logo span { color: #7c3aed; }
+
+        .status {
+            font-size: 2rem;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 3rem;
+        }
+
+        .spinner {
+            width: 6rem;
+            height: 6rem;
+            border: 0.5rem solid rgba(255,255,255,0.15);
+            border-top-color: #7c3aed;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-msg {
+            font-size: 1.8rem;
+            color: #ef4444;
+            margin-top: 2rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">Base<span>Stream</span></div>
+    <div class="status" id="status">Carregando…</div>
+    <div class="spinner" id="spinner"></div>
+    <div class="error-msg" id="error-msg">Falha ao conectar. Verifique sua internet.</div>
+
+    <script>
+    (function () {
+        var TARGET_URL = 'https://basestream-production.up.railway.app/tv';
+        var MAX_WAIT   = 3000; // ms before showing error
+
+        // Check connectivity
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timer = setTimeout(function () {
+            document.getElementById('status').textContent = 'Conectando…';
+        }, 500);
+
+        var timeout = setTimeout(function () {
+            document.getElementById('status').textContent = 'Redirecionando…';
+            window.location.replace(TARGET_URL);
+        }, MAX_WAIT);
+
+        // Try a fast HEAD request first
+        fetch(TARGET_URL, {
+            method: 'HEAD',
+            mode: 'no-cors',
+            signal: controller ? controller.signal : undefined
+        })
+        .then(function () {
+            clearTimeout(timeout);
+            clearTimeout(timer);
+            window.location.replace(TARGET_URL);
+        })
+        .catch(function () {
+            clearTimeout(timeout);
+            clearTimeout(timer);
+            // Try anyway — no-cors fetch may "fail" but server may be reachable
+            window.location.replace(TARGET_URL);
+        });
+    })();
+    </script>
+</body>
+</html>

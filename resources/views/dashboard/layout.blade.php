@@ -106,6 +106,11 @@
                            class="px-3 py-2 rounded-lg text-sm hover:bg-purple-500/20 transition-colors {{ request()->routeIs('dashboard.iptv*') ? 'bg-purple-500/20 text-white' : 'text-gray-400' }}">
                             📺 TV Apps
                         </a>
+                        <a href="{{ route('tv.home') }}"
+                           class="px-3 py-2 rounded-lg text-sm hover:bg-purple-500/20 transition-colors {{ request()->routeIs('tv.*') ? 'bg-purple-500/20 text-white' : 'text-gray-400' }}"
+                           target="_blank">
+                            📡 Smart TV
+                        </a>
 
                         <div class="hidden sm:block w-px h-6 bg-gray-700 mx-2"></div>
 
