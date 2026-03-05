@@ -329,7 +329,13 @@ class ContentController extends Controller
             elseif (str_starts_with($link, 'pluto=')) $linkType = 'PlutoTV';
             elseif (str_starts_with($link, 'resolver')) $linkType = 'API Resolver';
 
-            return back()->with('error', "Não foi possível resolver o stream ({$linkType}). O servidor pode estar offline ou o conteúdo foi removido. Tente outra fonte.");
+            $reason = $this->resolver->lastFailureReason;
+            $errorMsg = match(true) {
+                $reason === 'maintenance' => "A fonte ({$linkType}) está em manutenção no momento. Tente novamente mais tarde ou escolha outra fonte.",
+                default => "Não foi possível resolver o stream ({$linkType}). O servidor pode estar offline ou o conteúdo foi removido. Tente outra fonte.",
+            };
+
+            return back()->with('error', $errorMsg);
         }
 
         $proxyUrl = ($stream['type'] ?? '') === 'iframe'

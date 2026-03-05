@@ -16,6 +16,9 @@ class StreamResolverService
 
     private string $overflixHost = 'encontrei.info';
 
+    /** Motivo da última falha de resolução (maintenance, not_found, etc.) */
+    public ?string $lastFailureReason = null;
+
     /**
      * Resolve um link do BrazucaPlay para um URL de stream jogável.
      *
@@ -990,6 +993,7 @@ class StreamResolverService
         $params = "{'resolver': {$resolverNum}, 'request': '{$requestType}={$slug}'}";
         $payload = urlencode(base64_encode($params));
 
+        $maintenanceCount = 0;
         foreach ($apis as $apiHost) {
             try {
                 $url = "https://{$apiHost}/?resolver={$payload}";
@@ -1010,6 +1014,7 @@ class StreamResolverService
 
                         if ($result === 'API Under Maintenance' || $result === 'episode not found!') {
                             Log::warning("StreamResolver: API response: {$result}");
+                            if ($result === 'API Under Maintenance') $maintenanceCount++;
                             continue;
                         }
 
@@ -1066,6 +1071,10 @@ class StreamResolverService
                 Log::info("StreamResolver: API failed/maintenance, VidSrc fallback for {$slug} ({$mediaType})");
                 return $vidsrc;
             }
+        }
+
+        if ($maintenanceCount > 0) {
+            $this->lastFailureReason = 'maintenance';
         }
 
         return null;
