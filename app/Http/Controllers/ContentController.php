@@ -383,7 +383,9 @@ class ContentController extends Controller
             if (str_contains($contentType, 'mpegurl') || str_contains($contentType, 'x-mpegURL')
                 || str_ends_with($decodedUrl, '.m3u8') || str_starts_with(trim($body), '#EXTM3U')) {
 
-                $body = $this->rewriteM3u8($body, $decodedUrl);
+                // Usa a URL efetiva (após redirecionamentos) para resolver caminhos relativos do M3U8
+                $effectiveUrl = $response->effectiveUri()?->__toString() ?? $decodedUrl;
+                $body = $this->rewriteM3u8($body, $effectiveUrl);
                 $contentType = 'application/vnd.apple.mpegurl';
             }
 

@@ -333,8 +333,55 @@ class StreamResolverService
     }
 
     /**
+     * Proxy customizado via API geekantenado (equivalente ao custom_proxy() do Python).
+     * Usado quando sites bloqueiam requests diretos – a API faz o request de outro IP.
+     *
+     * @param string $url URL a ser buscada via proxy
+     * @param string $referer Referer a enviar na requisição proxied
+     * @return string|null HTML decodificado da resposta, ou null em caso de falha
+     */
+    private function customProxy(string $url, string $referer = ''): ?string
+    {
+        $token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyZXNvbHZlciIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzY4NTk1ODQxfQ.JPJC4433PfyZp_QMx40zAIE_8vVW54-N_ZLugy3RvgY';
+
+        // Formato Python dict string (igual ao usado pelos outros resolvers)
+        $params = "{'action': 'get', 'host': '{$url}', 'referer': '{$referer}', 'cache': {'format': 'minutes', 'limit': 10}}";
+        $payload = urlencode(base64_encode($params));
+
+        $apis = ['api.geekantenado.online', 'geekantenado.fly.dev'];
+
+        foreach ($apis as $apiHost) {
+            try {
+                $response = Http::timeout(20)
+                    ->withHeaders([
+                        'User-Agent' => $this->userAgent,
+                        'Authorization' => "Bearer {$token}",
+                    ])
+                    ->get("https://{$apiHost}/?resolver={$payload}");
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    if (($data['success'] ?? false) && !empty($data['result'])) {
+                        $decoded = @base64_decode($data['result']);
+                        if ($decoded && strlen($decoded) > 100) {
+                            Log::info("StreamResolver: customProxy got " . strlen($decoded) . " bytes from {$apiHost}");
+                            return $decoded;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::debug("StreamResolver: customProxy failed for {$apiHost}: {$e->getMessage()}");
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Resolve conteúdo via Overflix (serie3= e movie2=).
      * Equivalente ao overflix_resolver() do Python.
+     * Usa custom_proxy via geekantenado se a página bloquear requests diretos.
      */
     private function resolveOverflix(string $link): ?array
     {
@@ -352,12 +399,20 @@ class StreamResolverService
 
             Log::info("StreamResolver: overflix resolving URL: {$url}");
 
-            $html = $this->fetchPage($url);
-            if (!$html) {
-                return null;
-            }
-
+            // 1. Tenta busca direta
+            $html = $this->fetchPage($url) ?? '';
             $html = str_replace(["\n", "\r", "'"], ['', '', '"'], $html);
+
+            // 2. Se não encontrou "onclick","C_Video" no HTML, usa custom_proxy (como o Python faz)
+            // O Overflix pode bloquear bots – o proxy da geekantenado bypassa essa restrição
+            if (!str_contains($html, '"onclick","C_Video')) {
+                Log::info("StreamResolver: Overflix page missing C_Video onclick, trying custom_proxy");
+                $proxied = $this->customProxy($url, $url);
+                if ($proxied) {
+                    $html = str_replace(["\n", "\r", "'"], ['', '', '"'], $proxied);
+                    Log::info("StreamResolver: Overflix custom_proxy returned " . strlen($html) . " bytes");
+                }
+            }
 
             // Tenta extrair embed URL (getembed.php ou redirect.php)
             $embed = '';
@@ -371,54 +426,72 @@ class StreamResolverService
                 $embed = "https://{$overflixHost}{$embed}";
             }
 
-            // Tenta extrair links de players (mixdrop, streamtape, filemoon) via onclick
+            // Fallback: usa URL base do embed
+            if (empty($embed)) {
+                $embed = "https://{$overflixHost}/e/";
+            }
+
+            // Extrai video IDs por servidor: C_Video("ID","mixdrop"...), etc.
             $players = [];
-            if (preg_match_all('/\("(?:#mixdrop|#streamtape|#filemoon)"\)\.attr\("onclick","C_Video\("(.*?)"/s', $html, $matches)) {
+            if (preg_match_all('/\("(?:#mixdrop|#streamtape|#filemoon|#doodstream)"\)\.attr\("onclick","C_Video\("(.*?)"/s', $html, $matches)) {
                 $players = $matches[1];
             }
 
-            // Tenta cada servidor
-            $serverHosts = [
-                'mixdrop' => 'https://mixdrop.ps/e/',
-                'streamtape' => 'https://streamtape.com/e/',
-                'filemoon' => 'https://bysebuho.com/e/',
-            ];
-            $serverNames = ['mixdrop', 'streamtape', 'filemoon'];
-
-            foreach ($serverNames as $idx => $serverName) {
-                if (!empty($embed) && !empty($players)) {
-                    $language = $players[0] ?? '';
-                    $redirectUrl = "{$embed}getplay.php?id={$language}&sv={$serverName}";
-
-                    try {
-                        $response = Http::timeout(15)
-                            ->withHeaders([
-                                'User-Agent' => $this->userAgent,
-                                'Referer' => $url,
-                            ])
-                            ->withOptions(['allow_redirects' => false])
-                            ->get($redirectUrl);
-
-                        $location = $response->header('Location');
-                        if ($location) {
-                            if (preg_match('/https.+\/(.+)/', $location, $sm)) {
-                                $streamId = $sm[1];
-                                $streamUrl = $serverHosts[$serverName] . $streamId;
-                                // Resolve o embed do hoster
-                                $resolved = $this->resolveFromWebsite($streamUrl);
-                                if ($resolved) {
-                                    return $resolved;
-                                }
-                            }
-                        }
-                    } catch (\Throwable $e) {
-                        Log::debug("StreamResolver: Overflix {$serverName} failed: {$e->getMessage()}");
-                        continue;
-                    }
+            // Fallback mais simples: qualquer C_Video("ID"...
+            if (empty($players)) {
+                if (preg_match_all('/C_Video\("([^"]{5,})"/s', $html, $cvMatches)) {
+                    $players = array_unique($cvMatches[1]);
+                    // Remove a string que é só a definição da função
+                    $players = array_filter($players, fn($p) => $p !== 'a,b,c');
                 }
             }
 
-            // Fallback: tenta extrair qualquer stream direto do HTML
+            if (empty($players)) {
+                Log::warning("StreamResolver: Overflix no C_Video IDs found for {$url}");
+                return $this->resolveFromWebsite($url);
+            }
+
+            $videoId = $players[0];
+            Log::info("StreamResolver: Overflix found video ID: {$videoId}");
+
+            $serverHosts = [
+                'mixdrop'    => 'https://mixdrop.ps/e/',
+                'streamtape' => 'https://streamtape.com/e/',
+                'filemoon'   => 'https://bysebuho.com/e/',
+                'doodstream' => 'https://myvidplay.com/e/',
+            ];
+            $serverNames = ['mixdrop', 'streamtape', 'filemoon', 'doodstream'];
+
+            foreach ($serverNames as $serverName) {
+                $redirectUrl = "{$embed}getplay.php?id={$videoId}&sv={$serverName}";
+
+                try {
+                    $response = Http::timeout(15)
+                        ->withHeaders([
+                            'User-Agent' => $this->userAgent,
+                            'Referer' => $url,
+                        ])
+                        ->withOptions(['allow_redirects' => false])
+                        ->get($redirectUrl);
+
+                    $location = $response->header('Location');
+                    if ($location) {
+                        if (preg_match('/https.+\/(.+)/', $location, $sm)) {
+                            $streamId = $sm[1];
+                            $streamUrl = ($serverHosts[$serverName] ?? '') . $streamId;
+                            $resolved = $this->resolveFromWebsite($streamUrl);
+                            if ($resolved) {
+                                return $resolved;
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::debug("StreamResolver: Overflix {$serverName} failed: {$e->getMessage()}");
+                    continue;
+                }
+            }
+
+            // Fallback final
             return $this->resolveFromWebsite($url);
         } catch (\Throwable $e) {
             Log::error("StreamResolver: Overflix resolve failed: {$e->getMessage()}");
