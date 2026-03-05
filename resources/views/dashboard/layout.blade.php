@@ -102,6 +102,10 @@
                            class="px-3 py-2 rounded-lg text-sm hover:bg-purple-500/20 transition-colors {{ request()->routeIs('dashboard.vlc') ? 'bg-purple-500/20 text-white' : 'text-gray-400' }}">
                             📡 VLC
                         </a>
+                        <a href="{{ route('dashboard.iptv') }}"
+                           class="px-3 py-2 rounded-lg text-sm hover:bg-purple-500/20 transition-colors {{ request()->routeIs('dashboard.iptv*') ? 'bg-purple-500/20 text-white' : 'text-gray-400' }}">
+                            📺 TV Apps
+                        </a>
 
                         <div class="hidden sm:block w-px h-6 bg-gray-700 mx-2"></div>
 

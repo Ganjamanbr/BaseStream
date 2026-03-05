@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\XtreamController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ContentController;
 use App\Http\Controllers\DashboardController;
@@ -41,6 +42,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/dashboard/tokens', [DashboardController::class, 'createToken'])->name('dashboard.tokens.create');
     Route::delete('/dashboard/tokens/{id}', [DashboardController::class, 'revokeToken'])->name('dashboard.tokens.revoke');
     Route::get('/dashboard/vlc', [DashboardController::class, 'vlcGuide'])->name('dashboard.vlc');
+
+    // IPTV TV Apps — Xtream Codes credential management
+    Route::get('/dashboard/iptv', [DashboardController::class, 'iptvPage'])->name('dashboard.iptv');
+    Route::post('/dashboard/iptv/generate', [DashboardController::class, 'generateXtream'])->name('dashboard.iptv.generate');
+    Route::delete('/dashboard/iptv/revoke', [DashboardController::class, 'revokeXtream'])->name('dashboard.iptv.revoke');
 });
 
 // Conteúdo (auth required)
@@ -100,3 +106,32 @@ Route::get('/health', function () {
     // Always return 200 so Railway healthcheck passes (status field indicates degradation)
     return response()->json($checks, 200);
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Xtream Codes API — para apps de IPTV na TV
+// (TiviMate, IPTV Smarters, GSE Player, OTT Navigator, Perfect Player...)
+//
+// Configurar no app:
+//   Servidor : https://seu-dominio.com
+//   Usuário  : (gerado no dashboard/iptv)
+//   Senha    : (gerado no dashboard/iptv)
+// ─────────────────────────────────────────────────────────────────────────
+
+// Main API endpoint
+Route::match(['GET', 'POST'], '/player_api.php', [XtreamController::class, 'playerApi'])->name('xtream.api');
+
+// M3U playlist download
+Route::get('/get.php', [XtreamController::class, 'getM3uPlaylist'])->name('xtream.m3u');
+
+// Stream delivery (live TV, VOD, series)
+Route::get('/live/{username}/{password}/{streamId}', [XtreamController::class, 'deliverLive'])
+    ->name('xtream.live')
+    ->where('streamId', '[^/]+');
+
+Route::get('/movie/{username}/{password}/{streamId}', [XtreamController::class, 'deliverMovie'])
+    ->name('xtream.movie')
+    ->where('streamId', '[^/]+');
+
+Route::get('/series/{username}/{password}/{streamId}', [XtreamController::class, 'deliverSeries'])
+    ->name('xtream.series')
+    ->where('streamId', '[^/]+');

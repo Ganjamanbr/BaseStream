@@ -175,6 +175,61 @@ class DashboardController extends Controller
         return view('dashboard.vlc-guide');
     }
 
+    // ─── IPTV TV Apps (Xtream Codes) ───────────────────────────────────────────
+
+    /**
+     * GET /dashboard/iptv — Página de configuração de apps de TV
+     */
+    public function iptvPage(Request $request)
+    {
+        $user = $request->user();
+        return view('dashboard.iptv', compact('user'));
+    }
+
+    /**
+     * POST /dashboard/iptv/generate — Gera credenciais Xtream Codes
+     */
+    public function generateXtream(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->hasXtreamCredentials()) {
+            return back()->withErrors(['xtream' => 'Credenciais já existem. Revogue antes de gerar novas.']);
+        }
+
+        $username = \App\Models\User::generateXtreamUsername();
+        $password = \Illuminate\Support\Str::random(16);
+
+        $user->update([
+            'xtream_username' => $username,
+            'xtream_password' => \App\Models\User::hashXtreamPassword($password),
+        ]);
+
+        return back()->with('xtream_generated', [
+            'username' => $username,
+            'password' => $password,
+        ]);
+    }
+
+    /**
+     * DELETE /dashboard/iptv/revoke — Revoga credenciais Xtream Codes
+     */
+    public function revokeXtream(Request $request)
+    {
+        $user = $request->user();
+
+        $user->update([
+            'xtream_username' => null,
+            'xtream_password' => null,
+        ]);
+
+        if ($request->header('HX-Request')) {
+            return response('', 200);
+        }
+
+        return back()->with('success', 'Credenciais IPTV revogadas com sucesso.');
+    }
+
     private function calculateSuccessRate(int $userId): float
     {
         $total = StreamLog::whereHas('apiToken', fn($q) => $q->where('user_id', $userId))
