@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PlaylistController;
 use App\Http\Controllers\Api\StreamController;
 use App\Http\Controllers\Api\TokenController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +26,13 @@ use Illuminate\Support\Facades\Route;
 | GET    /api/stream?id=X       → Resolve stream (token auth)
 | GET    /api/streams           → Lista streams disponíveis
 | GET    /api/stream/proxy?url= → HLS proxy com CORS
+|
+| Playlists M3U (VLC, IPTV Smarters):
+| GET    /api/playlist/tv.m3u?token=bs_xxx     → TV ao vivo
+| GET    /api/playlist/filmes.m3u?token=bs_xxx → Filmes (lançamentos)
+| GET    /api/playlist/series.m3u?token=bs_xxx → Séries
+| GET    /api/playlist/all.m3u?token=bs_xxx    → Tudo
+| GET    /api/playlist/play?link=xxx&token=xxx → Resolve + redirect
 */
 
 // ─── Public routes ───
@@ -49,4 +57,14 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware('throttle:stream')->group(function () {
     Route::get('/stream', [StreamController::class, 'resolve']);
     Route::get('/stream/proxy', [StreamController::class, 'proxy']);
+});
+
+// ─── Playlist M3U (custom token auth via bs_xxx) ───
+// Para usar no VLC: Mídia → Abrir transmissão de rede → URL abaixo
+Route::prefix('playlist')->group(function () {
+    Route::get('/tv.m3u', [PlaylistController::class, 'tv']);
+    Route::get('/filmes.m3u', [PlaylistController::class, 'filmes']);
+    Route::get('/series.m3u', [PlaylistController::class, 'series']);
+    Route::get('/all.m3u', [PlaylistController::class, 'all']);
+    Route::get('/play', [PlaylistController::class, 'play']);
 });
